@@ -1,0 +1,156 @@
+<html>
+<head>
+<title>Canvas game</title>
+
+<script src="npgmain.js"></script>
+<script type="text/javascript">
+
+var agents = new Array();
+var selected = 0;
+var bubbleLife = 0; var bubblex = 0; var bubbley = 0; var bubblem = 0; var bubblei = 0;
+var desiredx = 0; var desiredy = 0;
+var score = 0;
+
+function myinit(){
+    for(i = 0; i<5; i++) { 
+        var a = {
+                xpos:WIDTH*Math.random(), 
+                ypos:HEIGHT*Math.random(), 
+                xtarget:WIDTH*Math.random(), 
+                ytarget:HEIGHT*Math.random(), 
+                speed:3, 
+                rad:20
+                };
+        agents.push(a);
+    }
+    ctx.font = "14pt Arial";
+}
+
+function update(){
+    
+    //move every agent towards his target
+    for(i in agents) {
+        var a = agents[i];
+        var xoff = a.xtarget-a.xpos;
+        var yoff = a.ytarget-a.ypos;
+        var d = Math.sqrt(xoff*xoff + yoff*yoff);
+        xoff = a.speed*xoff/d;
+        yoff = a.speed*yoff/d;
+        if (d>a.speed) {
+            a.xpos = a.xpos + xoff;
+            a.ypos = a.ypos + yoff;
+        }
+    }
+    
+    //handle game "dynamics"
+    if(bubbleLife>0) bubbleLife--;
+    if(bubbleLife<=0 && Math.random()<0.01){
+    
+        //instatiate new request
+        var ri = Math.floor(Math.random()*agents.length)
+        bubblex = agents[ri].xpos;
+        bubbley = agents[ri].ypos + 30;
+        bubbleLife = 130 + Math.floor(Math.random()*60);
+        bubblem = Math.floor(Math.random()*3);
+        bubblei = ri;
+        desiredx = Math.random()*WIDTH;
+        desiredy = Math.random()*HEIGHT;
+    }
+    
+}
+
+function draw(){
+    ctx.fillStyle = 'rgb(255,255,255)';
+    ctx.fillRect(0,0,WIDTH,HEIGHT);
+    
+    //draw bubble, if applicable, and desired location
+    if(bubbleLife>0) {
+        drawBubble(bubblex, bubbley, 230, 50, 20);
+        ctx.fillStyle = 'rgb(0,0,0)';
+        
+        if(bubblem==0) ctx.fillText("Move me!!! Move me!!!", bubblex+20, bubbley+30); 
+        else if(bubblem==1) ctx.fillText("PLEASE MOVE ME!", bubblex+20, bubbley+30); 
+        else ctx.fillText("MOVE MEEEEEeeee", bubblex+20, bubbley+30); 
+        
+        //draw desired destination circle and a line to it
+        ctx.fillStyle = 'rgb(100,100,200)';
+        drawCircle(desiredx, desiredy, 30);
+        
+        ctx.strokeStyle = 'rgb(100,100,200)';
+        ctx.beginPath();
+        ctx.moveTo(desiredx, desiredy);
+        ctx.lineTo(agents[bubblei].xpos, agents[bubblei].ypos);
+        ctx.stroke();
+    }
+    
+    //draw all agents
+    for(i in agents) {
+        var a = agents[i];
+        ctx.fillStyle = 'rgb(0,0,0)';
+        drawCircle(a.xpos,a.ypos,a.rad+1);
+        if(i==selected) {
+            ctx.fillStyle = 'rgb(200,200,100)';
+        } else {
+            ctx.fillStyle = 'rgb(200,100,100)';
+        }
+        drawCircle(a.xpos,a.ypos,a.rad);
+    }
+    
+    //draw score
+    ctx.fillStyle = 'rgb(0,0,0)';
+    ctx.fillText("Score: " + score, 20, 20); 
+}
+
+function mouseClick(x, y){
+    
+    //select an agent if we clicked on one
+    var agentSelected = 0;
+    for(i in agents) {
+        var a = agents[i];
+        var xoff = x-a.xpos;
+        var yoff = y-a.ypos;
+        var d = Math.sqrt(xoff*xoff + yoff*yoff);
+        if (d<a.rad && i!=selected) {
+            selected = i;
+            agentSelected = 1;
+        }
+    }
+    
+    //otherwise send the selected agent somewhere
+    if(agentSelected==0 && selected!=-1) {
+        var a = agents[selected];
+        a.xtarget = x;
+        a.ytarget = y;
+        
+        //find distance to desired location
+        var xoff = x-desiredx;
+        var yoff = y-desiredy;
+        var d = Math.sqrt(xoff*xoff + yoff*yoff);
+        
+        if (bubblei == selected && d < 30) {
+            score += bubbleLife;
+            bubbleLife = 0;
+        }
+    }
+}
+
+</script>
+
+<style type="text/css">
+canvas { 
+    border: 1px solid #555;
+    margin-top: 100px;
+}
+body {
+    text-align: center;
+    font-family: Verdana, Helvetica, sans-serif;
+    font-size: 12px;
+}
+</style>
+
+</head>
+<body onLoad="init();">
+<canvas id="mycanvas" width="500" height="500">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
+
+</body>
+</html>
