@@ -1,0 +1,81 @@
+<html>
+<head>
+<title>Canvas game</title>
+<script src="npgmain.js"></script>
+<script type="text/javascript">
+
+var ps;
+
+function myinit(){
+    
+    ps = new Array();
+    //initialize particles in middle
+    for(var i=0;i<100;i++){
+        var newp= {
+            x: WIDTH/2,
+            y: HEIGHT/2,
+            vx: randn(0, 6),
+            vy: randn(0, 6)
+        }
+        ps.push(newp);
+    }
+}
+
+function update(){
+    
+    for(i in ps) {
+        var p= ps[i];
+        
+        //update all particle positions
+        p.x+= p.vx;
+        p.y+= p.vy;
+        
+        //gravity
+        p.vy+= 0.2;
+    }
+    
+}
+
+function draw(){
+    ctx.clearRect(0,0,WIDTH,HEIGHT);
+    
+    //draw all particles
+    for(i in ps) {
+        var p= ps[i];
+        drawCircle(p.x, p.y, 5);
+    }
+}
+
+function mouseClick(x, y){
+}
+function keyUp(key){
+    
+    if(key==82) myinit();
+}
+function keyDown(key){
+}
+
+</script>
+
+<style type="text/css">
+canvas { 
+    border: 1px solid #555;
+    margin-top: 100px;
+}
+body {
+    text-align: center;
+    font-family: Verdana, Helvetica, sans-serif;
+    font-size: 12px;
+}
+</style>
+
+</head>
+
+<body onLoad="init(30);">
+
+<canvas id="mycanvas" width="500" height="500">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
+
+Press r to reload!
+
+</body>
+</html>
