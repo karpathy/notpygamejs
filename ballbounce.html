@@ -4,14 +4,33 @@
 <script src="npgmain.js"></script>
 <script type="text/javascript">
 
+var x, y, vx, vy;
+
 function myinit(){
+    x= randf(0,WIDTH); 
+    y= randf(0,HEIGHT);
+    vx= randf(-10,10); 
+    vy= randf(-10,10);
 }
 
 function update(){
+    
+    //move the ball according to its velocity
+    x+= vx;
+    y+= vy;
+    
+    //bounce on borders by reversing velocity in the appropriate dimension
+    if(x<0){x=0; vx= -vx;}
+    if(y<0){y=0; vy= -vy;}
+    if(x>WIDTH){x=WIDTH; vx= -vx;}
+    if(y>HEIGHT){y=HEIGHT; vy= -vy;}
 }
 
 function draw(){
+    
+    //draw the ball
     ctx.clearRect(0,0,WIDTH,HEIGHT);
+    drawCircle(x, y, 20);
 }
 
 function mouseClick(x, y){
