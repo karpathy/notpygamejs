@@ -52,6 +52,11 @@ function drawCircle(x, y, r){
     ctx.fill();
 }
 
+//uniform distribution integer
+function randi(s, e) {
+    return Math.floor(Math.random()*(e-s) + s);
+}
+
 //uniform distribution
 function randf(s, e) {
     return Math.random()*(e-s) + s;

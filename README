@@ -29,4 +29,4 @@ function keyDown(key){
 
 Also included:
 vector2D.js that implements a 2D vector object
-randf(), randn() functions that generate random uniform and gaussian number
+randf(), randn(), randi() functions that generate random uniform and gaussian numbers

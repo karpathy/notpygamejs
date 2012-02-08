@@ -19,6 +19,8 @@ function update(){
     x+= vx;
     y+= vy;
     
+    vy+= 1;
+    
     //bounce on borders by reversing velocity in the appropriate dimension
     if(x<0){x=0; vx= -vx;}
     if(y<0){y=0; vy= -vy;}
