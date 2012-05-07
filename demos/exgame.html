@@ -2,7 +2,7 @@
 <head>
 <title>Canvas game</title>
 
-<script src="npgmain.js"></script>
+<script src="../include/npgmain.js"></script>
 <script type="text/javascript">
 
 var agents = new Array();
@@ -87,6 +87,7 @@ function draw(){
     for(i in agents) {
         var a = agents[i];
         ctx.fillStyle = 'rgb(0,0,0)';
+        ctx.strokeStyle = 'rgb(0,0,0)';
         drawCircle(a.xpos,a.ypos,a.rad+1);
         if(i==selected) {
             ctx.fillStyle = 'rgb(200,200,100)';
@@ -149,8 +150,8 @@ body {
 </style>
 
 </head>
-<body onLoad="init(30);">
-<canvas id="mycanvas" width="500" height="500">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
+<body onLoad="NPGinit(50);">
+<canvas id="NPGcanvas" width="500" height="500">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 
 </body>
 </html>

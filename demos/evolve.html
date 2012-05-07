@@ -2,8 +2,8 @@
 <head>
 <title>Canvas Artificial Life Evolution Simulation</title>
 
-<script src="npgmain.js"></script>
-<script src="vector2D.js"></script>
+<script src="../include/npgmain.js"></script>
+<script src="../include/vector2D.js"></script>
 <script type="text/javascript">
 
 var agents = [];
@@ -398,11 +398,11 @@ body {
 </style>
 
 </head>
-<body onLoad="init(50);">
+<body onLoad="NPGinit(50);">
 <h1>Canvas Artifical Life evolutionary simulation v0.1</h1>
 <h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<canvas id="mycanvas" width="800" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
+<canvas id="NPGcanvas" width="800" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/karpathy/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
 <div class="ex">

@@ -37,29 +37,29 @@ function drawBubble(x, y, w, h, radius)
 }
 
 function drawRect(x, y, w, h){
-    ctx.beginPath();
-    ctx.rect(x,y,w,h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+  ctx.beginPath();
+  ctx.rect(x,y,w,h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawCircle(x, y, r){
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2, true); 
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2, true); 
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
 }
 
 //uniform distribution integer
 function randi(s, e) {
-    return Math.floor(Math.random()*(e-s) + s);
+  return Math.floor(Math.random()*(e-s) + s);
 }
 
 //uniform distribution
 function randf(s, e) {
-    return Math.random()*(e-s) + s;
+  return Math.random()*(e-s) + s;
 }
 
 //normal distribution random number
@@ -75,60 +75,60 @@ function randn(mean, variance) {
   X = Math.sqrt(-2 * Math.log(S) / S) * V1;
   X = mean + Math.sqrt(variance) * X;
   return X;
-  }
+}
 
 function eventClick(e) {
     
-    //get position of cursor relative to top left of canvas
-    var x;
-    var y;
-    if (e.pageX || e.pageY) { 
-      x = e.pageX;
-      y = e.pageY;
-    } else { 
-      x = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft; 
-      y = e.clientY + document.body.scrollTop + document.documentElement.scrollTop; 
-    } 
-    x -= canvas.offsetLeft;
-    y -= canvas.offsetTop;
-    
-    //call user-defined callback
-    mouseClick(x, y);
+  //get position of cursor relative to top left of canvas
+  var x;
+  var y;
+  if (e.pageX || e.pageY) { 
+    x = e.pageX;
+    y = e.pageY;
+  } else { 
+    x = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft; 
+    y = e.clientY + document.body.scrollTop + document.documentElement.scrollTop; 
+  } 
+  x -= canvas.offsetLeft;
+  y -= canvas.offsetTop;
+  
+  //call user-defined callback
+  mouseClick(x, y);
 }
 
 //event codes can be found here:
 //http://www.aspdotnetfaq.com/Faq/What-is-the-list-of-KeyCodes-for-JavaScript-KeyDown-KeyPress-and-KeyUp-events.aspx
 function eventKeyUp(e) {
-    var keycode = ('which' in e) ? e.which : e.keyCode;
-    keyUp(keycode);
+  var keycode = ('which' in e) ? e.which : e.keyCode;
+  keyUp(keycode);
 }
 
 function eventKeyDown(e) {
-    var keycode = ('which' in e) ? e.which : e.keyCode;
-    keyDown(keycode);
+  var keycode = ('which' in e) ? e.which : e.keyCode;
+  keyDown(keycode);
 }
 
-function init(FPS){
-    //takes frames per secont to run at
-    
-    canvas = document.getElementById('mycanvas');
-    ctx = canvas.getContext('2d');
-    WIDTH = canvas.width;
-    HEIGHT = canvas.height;
-    canvas.addEventListener('click', eventClick, false);
-    
-    //canvas element cannot get focus by default. Requires to either set 
-    //tabindex to 1 so that it's focusable, or we need to attach listeners
-    //to the document. Here we do the latter
-    document.addEventListener('keyup', eventKeyUp, true);
-    document.addEventListener('keydown', eventKeyDown, true);
-    
-    setInterval(tick, 1000/FPS);
-    
-    myinit();
+function NPGinit(FPS){
+  //takes frames per secont to run at
+  
+  canvas = document.getElementById('NPGcanvas');
+  ctx = canvas.getContext('2d');
+  WIDTH = canvas.width;
+  HEIGHT = canvas.height;
+  canvas.addEventListener('click', eventClick, false);
+  
+  //canvas element cannot get focus by default. Requires to either set 
+  //tabindex to 1 so that it's focusable, or we need to attach listeners
+  //to the document. Here we do the latter
+  document.addEventListener('keyup', eventKeyUp, true);
+  document.addEventListener('keydown', eventKeyDown, true);
+  
+  setInterval(NPGtick, 1000/FPS);
+  
+  myinit();
 }
 
-function tick() {
+function NPGtick() {
     update();
     draw();
 }
