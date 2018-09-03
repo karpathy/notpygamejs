@@ -108,6 +108,7 @@ function eventKeyDown(e) {
   keyDown(keycode);
 }
 
+var tickintervalid = undefined;
 function NPGinit(FPS){
   //takes frames per secont to run at
   
@@ -123,12 +124,19 @@ function NPGinit(FPS){
   document.addEventListener('keyup', eventKeyUp, true);
   document.addEventListener('keydown', eventKeyDown, true);
   
-  setInterval(NPGtick, 1000/FPS);
+  if (tickintervalid) clearInterval(tickintervalid);
+	  
+  tickintervalid = setInterval(FPS > 100? NPGtickFast: NPGtick, 1000/FPS);
   
   myinit();
 }
 
-function NPGtick() {
+function NPGtickFast() {
+	for(var i=0; i<100;i++) NPGtick(true);
+	NPGtick(false)
+}
+
+function NPGtick(skipdraw) {
     update();
-    draw();
+    if(!skipdraw) draw();
 }
