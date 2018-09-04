@@ -9,24 +9,31 @@
 var agents = [];
 var food = [];
 
-var rad= 15; //radius of agents
+// Initial genes values (mutating variables)
 var eyesep= 0.6; //separate of eyes in radians
 var eyelen= 30; //how many pixels away from body eyes are
 var eyesens= 0.0005; //how sensitive is the eye? decrease for more sensitivity...
-var eyemult= 0.5; //linear multiplier on strength of eye.
-var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
 var repthr= 3; //what is the replication threshold? in amount of food
+var mutrate= 0.05; //how common are mutations?
+var mutrate2= 0.2; //how severe are they when they do occur?
+var rad= 15; //radius of agents
+
+// laws of phisics
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
-var mutrate= 0.1; //how common are mutations?
-var mutrate2= 0.3; //how severe are they when they do occur?
-var foodaddfreq= 10; //how often do we add food?
-var foodlimit= 1000; //how much food can there be total?
+var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
+var foodaddfreq= 20; //how often do we add food?
+var foodlimit= 20; //how much food can there be total?
 var boostcost=0.001;  //how much does use of boost cost in health
 var clonehandicap= 0.2; // the starting health of a respawned mutated clone when population gets too low.
-var minagents=20; // the minimum number of agents
+var startagents= 20; // the starting number of agents
+var minagents= 10; // the minimum number of agents
 
-var brainsize= 30; //how many neurons does each brain have. Must be bigger than about 10
-var braindensity= 4; //how dense are the brains? (number of synapses per neuron)
+// fixed parameters
+var eyemult= 0.5; //linear multiplier on strength of eye.
+var brainsize= 25; //how many neurons does each brain have. Must be bigger than about 10
+var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
+
+//--------//--------
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
 
 function Brain()
@@ -106,42 +113,39 @@ Brain.prototype = {
             this.ix[i][j]= m;
           }
         }
-		let factor = 1;
 		// mutate speed
-		if(randf(0,1)<mutrate * 2) {
-			let sign = randf(0,1) > 0.5? 1: -1;
-			factor = 1 + (sign * randf(0,mutrate2));
-			//mutrate /= 2;
-		}
-		a.speed = parent.speed * factor
+		a.speed = parent.speed * calcFactor(mutrate * 2, mutrate2);
 		
 		// mutate repthr
-		factor = 1;
-		if(randf(0,1)<mutrate) {
-			let sign = randf(0,1) > 0.5? 1: -1;
-			factor = 1 + (sign * randf(0,mutrate2));
-			//mutrate /= 2;
-		}
-		a.repthr = parent.repthr * factor;
+		a.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
 		
 		// mutate mutation rate
-		factor = 1;
-		if(randf(0,1)<mutrate / 5) {
-			let sign = randf(0,1) > 0.5? 1: -1;
-			factor = 1 + (sign * randf(0,mutrate2));
-			//mutrate /= 2;
-		}
-		a.mutrate = parent.mutrate * factor;
+		a.mutrate = parent.mutrate * calcFactor(mutrate / 5, mutrate2);
 		
 		// mutate mutation severity
-		factor = 1;
-		if(randf(0,1)<mutrate / 5) {
-			let sign = randf(0,1) > 0.5? 1: -1;
-			factor= 1 + (sign * randf(0,mutrate2));
-			//mutrate /= 2;
-		}
-		a.mutrate2 = parent.mutrate2 * factor;
+		a.mutrate2 = parent.mutrate2 * calcFactor(mutrate / 5, mutrate2);
+		
+		// mutate eyesep
+		a.eyesep = parent.eyesep * calcFactor(mutrate/2, mutrate2);
+		
+		// mutate eyelen
+		a.eyelen = Math.max(parent.eyelen * calcFactor(mutrate/2, mutrate2), 1);
+		
+		// mutate eyesens
+		a.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
+		
+		// mutate rad
+		a.rad = parent.rad * calcFactor(mutrate, mutrate2);
     }
+}
+
+let calcFactor = function(mutrate, mutrate2) {
+	let factor = 1;
+	if(randf(0,1)<mutrate) {
+		let sign = randf(0,1) > 0.5? 1: -1;
+		factor = 1 + (sign * randf(0,mutrate2));
+	}
+	return factor;
 }
 
 function Agent(){
@@ -160,6 +164,11 @@ function Agent(){
 	this.repthr = repthr;
 	this.generation = 0;
 	this.children = 0;
+	
+	this.eyesep= eyesep;
+	this.eyelen= eyelen;
+	this.eyesens= eyesens;
+	this.rad = rad;
 }
 
 function myinit(){
@@ -172,6 +181,7 @@ function myinit(){
 }
 
 let firstrun = true;
+let curminagents = startagents;
 function update(){
     counter=counter+1;
     
@@ -191,8 +201,10 @@ function update(){
         
         //agent gets more hungry
 //        a.health-= foodlosstospeedratio * a.speed / Math.max(a.rep / 2, 1); // faster agents loses health more rapidly, and well fed agents lose a smaller proportion of their health.
-		let repfactor = a.rep > 1 ? a.rep: a.rep/2 + 0.5;
-        a.health-= (2*foodlosstospeedratio + (foodlosstospeedratio * a.speed / repfactor))/3; // faster agents loses health more rapidly
+		let repfactor = a.rep > 1 ? a.rep: a.rep/2 + 0.5;7
+		repfactor = Math.min(repfactor, a.rad / 5); // bigger agents can benefit from becoming fat
+        a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
+		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
         a.health-= boostcost*a.boost; //boost costs health
         if(a.health<0) { killi= i; }
     }
@@ -208,7 +220,7 @@ function update(){
             var a2 = agents[j];
             if(i==j) continue;
             var d= Math.sqrt(Math.pow(a.pos.x-a2.pos.x,2) + Math.pow(a.pos.y-a2.pos.y,2));
-            var overlap= rad*2-d;
+            var overlap= a.rad*2-d;
             if(overlap>0 && d>1){
                 //one agent pushes on another proportional to his boost. Higher boost wins
                 var aggression= a2.boost/(a.boost+a2.boost);
@@ -234,24 +246,21 @@ function update(){
             var f = food[j];
             
             var d2= Math.sqrt(Math.pow(a.pos.x-f.pos.x,2) + Math.pow(a.pos.y-f.pos.y,2));
-            if(d2 < rad){
+            if(d2 < a.rad){
                 a.rep+= foodgain;
                 a.health+= foodgain;
                 if(a.health>1) a.health= 1;
                 killi= j;
             }
-            
-            if(d2 < rad*10) { //for efficiency, don't even bother if it's too far
-                
-                //compute position of both eyes in world coordinates
-                var x1= a.pos.x + eyelen*Math.cos(a.dir - eyesep);
-                var y1= a.pos.y + eyelen*Math.sin(a.dir - eyesep);
-                var x2= a.pos.x + eyelen*Math.cos(a.dir + eyesep);
-                var y2= a.pos.y + eyelen*Math.sin(a.dir + eyesep);
-                
-                a.s1 += eyemult*Math.exp(-eyesens*(Math.pow(x1-f.pos.x,2) + Math.pow(y1-f.pos.y,2)));
-                a.s2 += eyemult*Math.exp(-eyesens*(Math.pow(x2-f.pos.x,2) + Math.pow(y2-f.pos.y,2)));
-            }
+            			
+			//compute position of both eyes in world coordinates
+			var x1= a.pos.x + a.eyelen*Math.cos(a.dir - a.eyesep);
+			var y1= a.pos.y + a.eyelen*Math.sin(a.dir - a.eyesep);
+			var x2= a.pos.x + a.eyelen*Math.cos(a.dir + a.eyesep);
+			var y2= a.pos.y + a.eyelen*Math.sin(a.dir + a.eyesep);
+			
+			a.s1 += eyemult*Math.exp(-a.eyesens*(Math.pow(x1-f.pos.x,2) + Math.pow(y1-f.pos.y,2)));
+			a.s2 += eyemult*Math.exp(-a.eyesens*(Math.pow(x2-f.pos.x,2) + Math.pow(y2-f.pos.y,2)));
         }
     }
     if(killi!=-1) food.splice(killi, 1);
@@ -315,7 +324,7 @@ function update(){
     }
     
     //spawn more agents if there are too few agents left
-    if(agents.length<minagents) {
+    if(agents.length<curminagents) {
         var anew= new Agent();
 		if (!firstrun) {
 			console.log('spawining new handicapped mutated clone of best agent');
@@ -335,6 +344,7 @@ function update(){
         agents.push(anew);
     } else {
 		firstrun = false;
+		curminagents = minagents;
 	}
 }
 
@@ -358,10 +368,10 @@ function draw(){
         
         //draw its eyes
         //first compute their position
-        var a1= -eyesep + Math.PI/2;
-        var a2= eyesep + Math.PI/2;
-        var x1= Math.cos(a1)*eyelen; var y1= Math.sin(a1)*eyelen;
-        var x2= Math.cos(a2)*eyelen; var y2= Math.sin(a2)*eyelen;
+        var a1= -a.eyesep + Math.PI/2;
+        var a2= a.eyesep + Math.PI/2;
+        var x1= Math.cos(a1)*a.eyelen; var y1= Math.sin(a1)*a.eyelen;
+        var x2= Math.cos(a2)*a.eyelen; var y2= Math.sin(a2)*a.eyelen;
         
         //draw the lines to eyes
         ctx.fillStyle = 'rgb(0,0,0)';
@@ -387,7 +397,7 @@ function draw(){
         } else {
             ctx.fillStyle = 'rgb(0,'+Math.round(255.0*a.health)+','+Math.round(255.0*a.health)+')';
         }
-        drawCircle(0, 0, rad);
+        drawCircle(0, 0, a.rad);
         ctx.restore();
         
         //draw brain of this agent, if it is selected
@@ -432,7 +442,7 @@ function mouseClick(x, y){
     for(i in agents) {
         var a = agents[i];
         var d= Math.sqrt(Math.pow(a.pos.x-x,2) + Math.pow(a.pos.y-y,2));
-        if(d<3*rad) {
+        if(d<3*a.rad) {
         
             //that's a hit! Let's select this one and unselect all others
             var newset= !a.selected;
@@ -450,6 +460,11 @@ function keyUp(key){
 function keyDown(key){
 }
 
+let isfast = false;
+function togglefast() {
+	NPGinit(isfast? 50: 500);
+	isfast = !isfast;
+}
 </script>
 
 <style type="text/css">
@@ -484,6 +499,7 @@ body {
 <h1>Canvas Artifical Life evolutionary simulation v0.1</h1>
 <h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
+<p><button onclick="togglefast()">Toggle Fast</button><p>
 <canvas id="NPGcanvas" width="1200" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/karpathy/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
