@@ -8,29 +8,29 @@
 
 var agents = [];
 var food = [];
+var generations = [];
 
-// Initial genes values (mutating variables)
+// Initial genes values (mutating variables) - first ancestors should be viable-ish
 var eyesep= 0.6; //separate of eyes in radians
 var eyelen= 30; //how many pixels away from body eyes are
 var eyesens= 0.0005; //how sensitive is the eye? decrease for more sensitivity...
-var repthr= 3; //what is the replication threshold? in amount of food
-var mutrate= 0.05; //how common are mutations?
-var mutrate2= 0.2; //how severe are they when they do occur?
+var repthr= 3; // what is the replication threshold? in amount of food
+var mutrate= 0.05; //how common are mutations? <0.5
+var mutrate2= 0.3; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
 
-// laws of phisics
+// laws of physics
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
 var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
-var foodaddfreq= 20; //how often do we add food?
-var foodlimit= 20; //how much food can there be total?
+var foodaddfreq= 18; //how often do we add food?
+var foodlimit= 60; //how much food can there be total?
 var boostcost=0.001;  //how much does use of boost cost in health
-var clonehandicap= 0.2; // the starting health of a respawned mutated clone when population gets too low.
+var clonehandicap= 0.4; // the starting health of a respawned mutated clone when population gets too low.
 var startagents= 20; // the starting number of agents
-var minagents= 10; // the minimum number of agents
 
-// fixed parameters
+// fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
-var brainsize= 25; //how many neurons does each brain have. Must be bigger than about 10
+var brainsize= 60; //how many neurons does each brain have. Must be bigger than about 10
 var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
 
 //--------//--------
@@ -120,10 +120,10 @@ Brain.prototype = {
 		a.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
 		
 		// mutate mutation rate
-		a.mutrate = parent.mutrate * calcFactor(mutrate / 5, mutrate2);
+		a.mutrate = Math.min(0.5, parent.mutrate * calcFactor(mutrate / 2, mutrate2));
 		
 		// mutate mutation severity
-		a.mutrate2 = parent.mutrate2 * calcFactor(mutrate / 5, mutrate2);
+		a.mutrate2 = Math.min(0.5, parent.mutrate2 * calcFactor(mutrate / 5, mutrate2));
 		
 		// mutate eyesep
 		a.eyesep = parent.eyesep * calcFactor(mutrate/2, mutrate2);
@@ -135,7 +135,7 @@ Brain.prototype = {
 		a.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
 		
 		// mutate rad
-		a.rad = parent.rad * calcFactor(mutrate, mutrate2);
+		a.rad = Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2));
     }
 }
 
@@ -143,7 +143,9 @@ let calcFactor = function(mutrate, mutrate2) {
 	let factor = 1;
 	if(randf(0,1)<mutrate) {
 		let sign = randf(0,1) > 0.5? 1: -1;
-		factor = 1 + (sign * randf(0,mutrate2));
+		let r = randf(0,mutrate2)
+		factor = 1 / (1+ (sign * r));
+		if (factor <0) alert(`bug sign: ${sign} mutrate2: ${mutrate2} r: ${r}`);
 	}
 	return factor;
 }
@@ -181,7 +183,7 @@ function myinit(){
 }
 
 let firstrun = true;
-let curminagents = startagents;
+let numagents = 0;
 function update(){
     counter=counter+1;
     
@@ -201,7 +203,7 @@ function update(){
         
         //agent gets more hungry
 //        a.health-= foodlosstospeedratio * a.speed / Math.max(a.rep / 2, 1); // faster agents loses health more rapidly, and well fed agents lose a smaller proportion of their health.
-		let repfactor = a.rep > 1 ? a.rep: a.rep/2 + 0.5;7
+		let repfactor = a.rep > 1 ? a.rep: a.rep/2 + 0.5;
 		repfactor = Math.min(repfactor, a.rad / 5); // bigger agents can benefit from becoming fat
         a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
 		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
@@ -211,6 +213,12 @@ function update(){
     if(killi!=-1) {
 		console.log(`A generation ${agents[i].generation} agent died! ${agents.length - 1} agents left`);
 		agents.splice(killi, 1);
+		
+		// 5% chance of respawning a random old ancestor after generations stabilize
+		if (generations.length > 0 && randf(0,1)<0.05) {
+			console.warn(`An ancient specimen of generation ${randi(0, generations.length -1)} has been ressurrected`);
+			agents.push(generations[randi(0, generations.length -1)]);
+		}
 	}
     
     //agent collision detection and resolution
@@ -259,8 +267,8 @@ function update(){
 			var x2= a.pos.x + a.eyelen*Math.cos(a.dir + a.eyesep);
 			var y2= a.pos.y + a.eyelen*Math.sin(a.dir + a.eyesep);
 			
-			a.s1 += eyemult*Math.exp(-a.eyesens*(Math.pow(x1-f.pos.x,2) + Math.pow(y1-f.pos.y,2)));
-			a.s2 += eyemult*Math.exp(-a.eyesens*(Math.pow(x2-f.pos.x,2) + Math.pow(y2-f.pos.y,2)));
+			a.s1 += eyemult*Math.exp(-(Math.pow(1+a.eyesens*15/rad, 1/2)-1)*(Math.pow(x1-f.pos.x,2) + Math.pow(y1-f.pos.y,2)));
+			a.s2 += eyemult*Math.exp(-(Math.pow(1+a.eyesens*15/rad, 1/2)-1)*(Math.pow(x2-f.pos.x,2) + Math.pow(y2-f.pos.y,2)));
         }
     }
     if(killi!=-1) food.splice(killi, 1);
@@ -274,6 +282,7 @@ function update(){
         var des= res.out0;
         if(des>0.9)des=0.9;
         if(des<-0.9)des=-0.9;
+		a.health-= foodlosstospeedratio * Math.abs(des) *5; // turning costs health
         a.dir += des;
         
         //wrap direction around to keep it in range of [0, 2pi]
@@ -306,8 +315,8 @@ function update(){
     
     if(bi!=-1) {
         var a = agents[bi];
-        a.rep= 0;
-		a.children= a.children+1;
+        a.rep -= Math.min(a.rep, a.rep*0.3 + 1);
+		a.children++;
         
          var anew= new Agent();
          anew.pos=  new Vector2D(a.pos.x + randf(-30,30), a.pos.y + randf(-30,30));
@@ -318,33 +327,51 @@ function update(){
 		if (anew.generation > generation) {
 			generation = anew.generation;
 			console.log(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
+			document.getElementById('generation').innerHTML = '' + generation;
+			generations.push(a);
 		}
 		
         agents.push(anew);
     }
     
     //spawn more agents if there are too few agents left
-    if(agents.length<curminagents) {
+    if(agents.length<Math.max(2,startagents - generation)) {
         var anew= new Agent();
 		if (!firstrun) {
-			console.log('spawining new handicapped mutated clone of best agent');
-			// selecting random live agent
-			let best = agents[Math.floor(randf(0, agents.length -1))];
+			let best;
 			/*
+			// selecting random live agent
+			best = agents[Math.floor(randf(0, agents.length -1))];
+			*/
+			/*
+			best = agents[0];
 			for(i in agents) {
 				var a = agents[i];
-				if (a.children > best.children || a.generation > best.generation || a.health > best.health) best = a;
+				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
+				if (a.children > best.children || a.generation < best.generation || a.health > best.health) best = a;
+			}*/
+			
+			// rolling back time to an extinct generation
+			best = agents[0];
+			for(i in agents) {
+				var ancestor = agents[i];
+				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
+				if (a.generation < best.generation || a.children > best.children || a.health > best.health) best = a;
 			}
-			*/
+			if (best.generation > 0) best = generations[best.generation - 1];
+			
 			anew.brain.mutateFrom(best, anew);
 			anew.generation = best.generation;
 			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
-			console.log(`best was generation ${best.generation} with ${best.children} children and ${best.health} health`);
+			console.warn(`spawining new handicapped mutated clone of generation ${best.generation} with ${best.children} children and ${best.health} health`);
 		}
         agents.push(anew);
     } else {
 		firstrun = false;
-		curminagents = minagents;
+	}
+	if (numagents != agents.length) {
+		numagents = agents.length;
+		document.getElementById('agents').innerHTML = '' + numagents;
 	}
 }
 
@@ -496,13 +523,13 @@ body {
 
 </head>
 <body onLoad="NPGinit(100);">
-<h1>Canvas Artifical Life evolutionary simulation v0.1</h1>
-<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a><h2/>
+<h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
+<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<p><button onclick="togglefast()">Toggle Fast</button><p>
-<canvas id="NPGcanvas" width="1200" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
+<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><p>
+<canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
-<p>Hit CTRL+U to see source code, or visit <a href="https://github.com/karpathy/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
+<p>Hit CTRL+U to see source code, or visit <a href="https://github.com/jonathascarrijo/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
 <div class="ex">
 <p>Basically, each creature has two eyes that sense amount of food. Both eyes act as input neurons in a brain, which is just a very simple Neural Network. The output nodes of the neural network turn them. If they accumulate food, they can reproduce with slight mutations in the weights of their brain.</p>
 </div>
