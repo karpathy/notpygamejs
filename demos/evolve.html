@@ -20,6 +20,7 @@ var mutrate2= 0.3; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
 var speed = 4.0; // speed of agents
 var initbrainsize= 15; //how many neurons does each brain have. Must be bigger than about 10
+var minbrainsize= 15;
 var initbraindensity= 3; //how dense are the brains? (number of synapses per neuron)
 
 // laws of physics
@@ -35,7 +36,7 @@ var minagents= 3; // the minimum number of agents
 
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
-
+var agentToFoodBrightnessRatio= 2;
 
 //--------//--------
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
@@ -45,6 +46,9 @@ function Brain(a)
 {
   let brainsize = a? a.brainsize: initbrainsize;
   let braindensity = a? a.braindensity: initbraindensity;
+
+  this.size = brainsize;
+  this.density = braindensity;
 
   //1D array of neuron activations
   this.act= new Array(brainsize);
@@ -94,6 +98,16 @@ Brain.prototype = {
             out0: (this.act[8] || 0) - 0.5,
             out1: this.act[9] || 0
         };
+    },
+
+    resetWeights: function() {
+      for (var i=0;i<this.size;i++) {
+        this.w[i]= new Array(this.density);
+        this.ix[i]= new Array(this.density);
+        for (var j=0;j<this.density;j++) {
+          this.w[i][j]= 0;
+        }
+      }
     }
 }
 
@@ -149,7 +163,6 @@ Agent.prototype = {
     //copy over the brain with some mutation. crude. for now
     mutateFrom : function(parent) {
 		let pbrain = parent.brain
-		console.log('reproducing');
 		let mutrate = parent.mutrate;
 		let mutrate2 = parent.mutrate2;
 		
@@ -159,12 +172,12 @@ Agent.prototype = {
 		let change = doubleOrHalfMutation(mutrate/10, mutrate2, 0.8);
 		brainmutations += change;
 		this.brainsize *= (change|| 1);
-		this.brainsize = Math.round(Math.max(this.brainsize, 10)); // cannot be <10
+		this.brainsize = Math.round(Math.max(this.brainsize, minbrainsize));
         if (!change) { // if no multiplication change
-          change = discreteMutation(mutrate/10, mutrate2, 0.8);
+          change = discreteMutation(mutrate / 10, mutrate2, 0.8);
           brainmutations += Math.abs(change);
           this.brainsize += change;
-          this.brainsize = Math.max(this.brainsize, 10); // cannot be <10
+          this.brainsize = Math.max(this.brainsize, minbrainsize);
         }
 
 		// mutate braindensity
@@ -177,9 +190,11 @@ Agent.prototype = {
 		  this.brain= undefined;
 		  console.warn(`replacing brain with mutated one with brainsize ${this.brainsize} and braindensity ${this.braindensity}`);
           this.brain= new Brain(this);
+          // we set a blank brain in order to copy only the pre-existing weights
+          this.brain.resetWeights();
         }
 
-        //lossy copy of brain structure
+        // [lossy] copy of brain structure
         for (var i=0;i<this.brainsize&&i<parent.brainsize;i++) {
           for (var j=0;j<this.braindensity&&j<parent.braindensity;j++) {
             var m= pbrain.w[i][j];
@@ -246,7 +261,6 @@ function myinit(){
 
 let firstrun = true;
 let numagents = 0;
-let avgs1 = 0;
 function update(){
     counter++;
     
@@ -287,71 +301,79 @@ function update(){
         agents.splice(killi[i], 1);
       }
 
-      // 5% chance of respawning a random old ancestor after generations stabilize
-      if (generations.length > 5 && randf(0, 1) < 0.05) {
+      // 25% chance of respawning a random old ancestor after generations stabilize
+      if (generations.length > 5 && randf(0, 1) < 0.25) {
         console.warn(`An ancient specimen of generation ${randi(5, generations.length - 1)} has been ressurrected`);
         agents.push(generations[randi(0, generations.length - 1)]);
       }
     }
     
-    //agent collision detection and resolution
-    for(i in agents) {
-        var a = agents[i];
-        for(j in agents) {
-            var a2 = agents[j];
-            if(i==j) continue;
-            var d= Math.sqrt(Math.pow(a.pos.x-a2.pos.x,2) + Math.pow(a.pos.y-a2.pos.y,2));
-            var overlap= a.rad*2*scalefactor-d;
-            if(overlap>0 && d>1){
-                //one agent pushes on another proportional to his boost. Higher boost wins
-                var aggression= a2.boost/(a.boost+a2.boost);
-                if(a.boost<0.01 && a2.boost<0.01) aggression=0.5;
-                var ff2= (overlap*aggression)/d;
-                var ff1= (overlap*(1-aggression))/d;
-                a2.pos.x+= (a2.pos.x-a.pos.x)*ff2;
-                a2.pos.y+= (a2.pos.y-a.pos.y)*ff2;
-                a.pos.x-= (a2.pos.x-a.pos.x)*ff1;
-                a.pos.y-= (a2.pos.x-a.pos.x)*ff1;
-            }
-        }
-    }
-    
-    //check if any agent ate food
-    //and while we're at it, compute input to sense
-    killi=-1;
-    for(i in agents) {
-        var a = agents[i];
-        a.s1=0; a.s2=0;
-        
-        for(j in food) {
-            var f = food[j];
-            
-            var d2= Math.sqrt(Math.pow(a.pos.x-f.pos.x,2) + Math.pow(a.pos.y-f.pos.y,2));
-            if(d2 < a.rad*scalefactor){
-                a.rep+= foodgain;
-                a.health+= foodgain;
-                if(a.health>1) a.health= 1;
-                killi= j;
-            }
-            			
-			//compute position of both eyes in world coordinates
-			var x1= a.pos.x + a.eyelen*Math.cos(a.dir - a.eyesep)*scalefactor;
-			var y1= a.pos.y + a.eyelen*Math.sin(a.dir - a.eyesep)*scalefactor;
-			var x2= a.pos.x + a.eyelen*Math.cos(a.dir + a.eyesep)*scalefactor;
-			var y2= a.pos.y + a.eyelen*Math.sin(a.dir + a.eyesep)*scalefactor;
+    //agent collision detection and resolution, and agent sightspotting while we're at it
+    for(let i in agents) {
+      var a = agents[i];
+      a.s1 = 0;
+      a.s2 = 0;
 
-            let adds1 = eyemult * Math.exp(-(Math.pow(1+a.eyesens, 1/2)-1)*15/rad * (Math.pow((x1-f.pos.x)/scalefactor,2) + Math.pow((y1-f.pos.y)/scalefactor,2)));
-            let adds2 = eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1)*15/rad * (Math.pow((x2 - f.pos.x)/scalefactor, 2) + Math.pow((y2 - f.pos.y)/scalefactor, 2)));
-            a.s1 += adds1;
-            a.s2 += adds2;
+      //compute position of both eyes in world coordinates
+      var x1 = a.pos.x + a.eyelen * Math.cos(a.dir - a.eyesep) * scalefactor;
+      var y1 = a.pos.y + a.eyelen * Math.sin(a.dir - a.eyesep) * scalefactor;
+      var x2 = a.pos.x + a.eyelen * Math.cos(a.dir + a.eyesep) * scalefactor;
+      var y2 = a.pos.y + a.eyelen * Math.sin(a.dir + a.eyesep) * scalefactor;
 
-            avgs1 = (avgs1 * (counter-1) + adds1 ) / counter;
+      for (let j in agents) {
+        var a2 = agents[j];
+
+        if (i == j) continue;
+        var d = Math.sqrt(Math.pow(a.pos.x - a2.pos.x, 2) + Math.pow(a.pos.y - a2.pos.y, 2));
+        var overlap = a.rad * 2 * scalefactor - d;
+        if (overlap > 0 && d > 1) {
+          //one agent pushes on another proportional to his boost. Higher boost wins
+          var aggression = a2.boost / (a.boost + a2.boost);
+          if (a.boost < 0.01 && a2.boost < 0.01) aggression = 0.5;
+          var ff2 = (overlap * aggression) / d;
+          var ff1 = (overlap * (1 - aggression)) / d;
+          a2.pos.x += (a2.pos.x - a.pos.x) * ff2;
+          a2.pos.y += (a2.pos.y - a.pos.y) * ff2;
+          a.pos.x -= (a2.pos.x - a.pos.x) * ff1;
+          a.pos.y -= (a2.pos.x - a.pos.x) * ff1;
         }
+
+        a.s1 += eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1) * 15 / rad * (Math.pow((x1 - a2.pos.x) / scalefactor, 2) + Math.pow((y1 - a2.pos.y) / scalefactor, 2)) * agentToFoodBrightnessRatio * a2.rad/rad);
+        a.s2 += eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1) * 15 / rad * (Math.pow((x2 - a2.pos.x) / scalefactor, 2) + Math.pow((y2 - a2.pos.y) / scalefactor, 2)) * agentToFoodBrightnessRatio * a2.rad/rad);
+      }
+
+      //check if any agent ate food
+      killi = new Array();
+      for (let j in food) {
+        var f = food[j];
+
+        var d2 = Math.sqrt(Math.pow(a.pos.x - f.pos.x, 2) + Math.pow(a.pos.y - f.pos.y, 2));
+        if (d2 < a.rad * scalefactor) {
+          a.rep += foodgain;
+          a.health += foodgain;
+          if (a.health > 1) a.health = 1;
+          killi.push(j);
+        }
+
+        //and while we're at it, compute input to sense
+        a.s1 += eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1) * 15 / rad * (Math.pow((x1 - f.pos.x) / scalefactor, 2) + Math.pow((y1 - f.pos.y) / scalefactor, 2)));
+        a.s2 += eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1) * 15 / rad * (Math.pow((x2 - f.pos.x) / scalefactor, 2) + Math.pow((y2 - f.pos.y) / scalefactor, 2)));
+      }
+
+      // destroy eaten foods
+      if (killi.length) {
+        killi.sort(function (a, b) {
+          return b - a
+        });
+
+        for (i in killi) {
+          food.splice(killi[i], 1);
+        }
+      }
     }
-    if(killi!=-1) food.splice(killi, 1);
-    
+
     //feed forward the brain from senses to output
-    for(i in agents) {
+    for(let i in agents) {
         var a = agents[i];
         res= a.brain.tick(a);
         
@@ -382,10 +404,11 @@ function update(){
     
     //handle births
     var bi= -1;
-    for(i in agents) {
+    for(let i in agents) {
         var a = agents[i];
         if(a.rep>repthr) {
             //this agent reproduces!
+            console.warn(`A generation ${a.generation} specimen reproduced`);
             bi= i;
         }
     }
@@ -402,7 +425,7 @@ function update(){
 		
 		if (anew.generation > generation) {
 			generation = anew.generation;
-			console.log(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
+			console.warn(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
 			document.getElementById('generation').innerHTML = '' + generation;
 			generations.push(a);
 		}
@@ -574,6 +597,54 @@ function togglefast() {
 	NPGinit(isfast? 50: 500);
 	isfast = !isfast;
 }
+function saveState() {
+  let obj = {
+    agents,
+    food,
+    generations,
+    generation
+  };
+  save('evolution.json', JSON.stringify(obj));
+}
+function save(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+
+  element.style.display = 'none';
+  document.body.appendChild(element);
+
+  element.click();
+
+  document.body.removeChild(element);
+}
+
+function handleFileSelect(evt) {
+  var files = evt.target.files; // FileList object
+
+  // Loop through the FileList and render image files as thumbnails.
+  for (var i = 0, f; f = files[i]; i++) {
+
+    var reader = new FileReader();
+
+    // Closure to capture the file information.
+    reader.onload = (function(theFile) {
+      return function(e) {
+        // Render thumbnail.
+        let obj = JSON.parse(e.target.result);
+        agents = obj.agents;
+        food = obj.food;
+        generations = obj.generations;
+        generation = obj.generation;
+      };
+    })(f);
+
+    // Read in the image file as a data URL.
+    reader.readAsText(f);
+  }
+}
+
+
 </script>
 
 <style type="text/css">
@@ -604,11 +675,11 @@ body {
 </style>
 
 </head>
-<body onLoad="NPGinit(100);">
+<body onLoad="NPGinit(100);document.getElementById('files').addEventListener('change', handleFileSelect, false);">
 <h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
 <h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><p>
+<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" /><p>
 <canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/jonathascarrijo/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
