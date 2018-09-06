@@ -89,10 +89,10 @@ Brain.prototype = {
             this.act[i]= 1.0/(1.0 + Math.exp(-a));  //pass through sigmoid
         }
         
-        //assume last 2 neurons are the outputs
+        //assume neurons 9 and 10 are the outputs
         return {
-            out0: (this.act[host.brainsize-1] || 0) - 0.5,
-            out1: this.act[host.brainsize-2] || 0
+            out0: (this.act[8] || 0) - 0.5,
+            out1: this.act[9] || 0
         };
     }
 }
@@ -157,10 +157,10 @@ Agent.prototype = {
 
 		// mutate brainsize (sometimes double/half, sometimes increment/decrement).
 		let change = doubleOrHalfMutation(mutrate/10, mutrate2, 0.8);
-		brainmutations += Math.abs(change);
-		this.brainsize *= change;
+		brainmutations += change;
+		this.brainsize *= (change|| 1);
 		this.brainsize = Math.round(Math.max(this.brainsize, 10)); // cannot be <10
-        if (change == 1) { // if no multiplication change
+        if (!change) { // if no multiplication change
           change = discreteMutation(mutrate/10, mutrate2, 0.8);
           brainmutations += Math.abs(change);
           this.brainsize += change;
