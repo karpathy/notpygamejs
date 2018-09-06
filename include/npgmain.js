@@ -133,7 +133,7 @@ function NPGinit(FPS){
 
 function NPGtickFast() {
 	for(var i=0; i<100;i++) NPGtick(true);
-	NPGtick(false)
+	NPGtick(false);
 }
 
 function NPGtick(skipdraw) {

@@ -20,6 +20,7 @@ var mutrate2= 0.3; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
 
 // laws of physics
+var scale= 100; // the scale/zoom of the physical world representation.
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
 var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
 var foodaddfreq= 18; //how often do we add food?
@@ -30,15 +31,16 @@ var startagents= 20; // the starting number of agents
 
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
-var brainsize= 60; //how many neurons does each brain have. Must be bigger than about 10
-var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
+var initbrainsize= 15; //how many neurons does each brain have. Must be bigger than about 10
+var initbraindensity= 3; //how dense are the brains? (number of synapses per neuron)
 
 //--------//--------
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
 
-function Brain()
+function Brain(a)
 {
-  
+  let brainsize = a? a.brainsize: initbrainsize;
+  let braindensity = a? a.braindensity: initbrainsize;
   //1D array of neuron activations
   this.act= new Array(brainsize);
   for (var i=0;i<brainsize;i++) {
@@ -56,7 +58,6 @@ function Brain()
         this.ix[i][j]= randi(0, brainsize);
     }
   }
-  
 }
 
 //feeds forward the brain. s1 and s2 are the two senses, both in [0,1]
@@ -64,8 +65,10 @@ function Brain()
 Brain.prototype = {
     
     //brain takes inputs and sets its outputs
-    tick : function(s1, s2) {
-
+    tick : function(host) {
+		let s1 = host.s1;
+		let s2 = host.s2;
+		
         this.act[0]= s1; //set inputs
         this.act[1]= s2;
         this.act[3]= 1; //some bias neurons are always on
@@ -73,9 +76,9 @@ Brain.prototype = {
         this.act[5]= 1;
         this.act[6]= 1;
         
-        for (var i=7;i<brainsize;i++) {
+        for (var i=7;i<host.brainsize;i++) {
             var a=0;
-            for (var j=0;j<braindensity;j++) {
+            for (var j=0;j<host.braindensity;j++) {
                 a+= this.w[i][j]*this.act[this.ix[i][j]]
             }
             this.act[i]= 1.0/(1.0 + Math.exp(-a));  //pass through sigmoid
@@ -83,59 +86,9 @@ Brain.prototype = {
         
         //assume last 2 neurons are the outputs
         return {
-            out0: this.act[brainsize-1] - 0.5, 
-            out1: this.act[brainsize-2]
+            out0: this.act[host.brainsize-1] - 0.5, 
+            out1: this.act[host.brainsize-2]
         };
-    },
-    
-    //used during reproduction
-    //copy over the brain with some mutation. crude. for now
-    mutateFrom : function(parent, a) {
-		let brain = parent.brain
-		console.log('reproducing');
-		let mutrate = parent.mutrate;
-		let mutrate2 = parent.mutrate2;
-        //lossy copy of brain structure
-        for (var i=0;i<brainsize;i++) {
-          for (var j=0;j<braindensity;j++) {
-            var m= brain.w[i][j];
-            if(randf(0,1)<mutrate) {
-				m += randn(0,mutrate2); 
-				//mutrate /= 2;
-			}
-            this.w[i][j]= m;
-            
-            m= brain.ix[i][j];
-            if(randf(0,1)<mutrate) {
-				m = randi(0,brainsize);
-				//mutrate /= 2;
-			}
-            this.ix[i][j]= m;
-          }
-        }
-		// mutate speed
-		a.speed = parent.speed * calcFactor(mutrate * 2, mutrate2);
-		
-		// mutate repthr
-		a.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
-		
-		// mutate mutation rate
-		a.mutrate = Math.min(0.5, parent.mutrate * calcFactor(mutrate / 2, mutrate2));
-		
-		// mutate mutation severity
-		a.mutrate2 = Math.min(0.5, parent.mutrate2 * calcFactor(mutrate / 5, mutrate2));
-		
-		// mutate eyesep
-		a.eyesep = parent.eyesep * calcFactor(mutrate/2, mutrate2);
-		
-		// mutate eyelen
-		a.eyelen = Math.max(parent.eyelen * calcFactor(mutrate/2, mutrate2), 1);
-		
-		// mutate eyesens
-		a.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
-		
-		// mutate rad
-		a.rad = Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2));
     }
 }
 
@@ -150,12 +103,15 @@ let calcFactor = function(mutrate, mutrate2) {
 	return factor;
 }
 
-function Agent(){
+function Agent(parent){
     this.pos= new Vector2D(randf(0,WIDTH), randf(0,HEIGHT));
     this.dir= randf(0, 2*Math.PI);
     this.s1= 0;  //food sense eye 1
     this.s2= 0;  //food sense eye 2
-    this.brain= new Brain();
+	
+	this.brainsize = parent? parent.brainsize: initbrainsize;
+	this.braindensity = parent? parent.braindensity: initbraindensity;
+    this.brain= new Brain(this);
     this.speed= 4.0;
     this.boost= 0.0; //boost, on top of speed
     this.health= 1.0;
@@ -171,6 +127,77 @@ function Agent(){
 	this.eyelen= eyelen;
 	this.eyesens= eyesens;
 	this.rad = rad;
+	
+	if (parent) {
+		this.mutateFrom(parent);
+	}
+}
+
+function discreteMutation(mutrate, mutrate2) {
+	return (randf(0,1)>0.5?1:-1)*(randf(0,1)<mutrate*mutrate2?1:0);
+}
+Agent.prototype = {
+    //used during reproduction
+    //copy over the brain with some mutation. crude. for now
+    mutateFrom : function(parent) {
+		let pbrain = parent.brain
+		console.log('reproducing');
+		let mutrate = parent.mutrate;
+		let mutrate2 = parent.mutrate2;
+		
+		let brainmutations = 0;
+		// mutate brainsize
+		let change = discreteMutation(mutrate, mutrate2);
+		brainmutations += Math.abs(change);
+		this.brainsize += change;
+		
+		// mutate braindensity
+		change = discreteMutation(mutrate, mutrate2);
+		brainmutations += Math.abs(change);
+		this.braindensity += change;
+		
+		if (brainmutations) this.brain= new Brain(this);
+		
+        //lossy copy of brain structure
+        for (var i=0;i<this.brainsize&&i<parent.brainsize;i++) {
+          for (var j=0;j<this.braindensity&&j<parent.braindensity;j++) {
+            var m= pbrain.w[i][j];
+            if(randf(0,1)<mutrate) {
+				m += randn(0,mutrate2); 
+			}
+            this.brain.w[i][j]= m;
+            
+            m= pbrain.ix[i][j];
+            if(randf(0,1)<mutrate) {
+				m = randi(0,this.brainsize);
+			}
+            this.brain.ix[i][j]= m;
+          }
+        }
+		// mutate speed
+		this.speed = parent.speed * calcFactor(mutrate * 2, mutrate2);
+		
+		// mutate repthr
+		this.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
+		
+		// mutate mutation rate
+		this.mutrate = Math.min(0.5, parent.mutrate * calcFactor(mutrate / 2, mutrate2));
+		
+		// mutate mutation severity
+		this.mutrate2 = Math.min(0.5, parent.mutrate2 * calcFactor(mutrate / 5, mutrate2));
+		
+		// mutate eyesep
+		this.eyesep = parent.eyesep * calcFactor(mutrate/2, mutrate2);
+		
+		// mutate eyelen
+		this.eyelen = Math.max(parent.eyelen * calcFactor(mutrate/2, mutrate2), 1);
+		
+		// mutate eyesens
+		this.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
+		
+		// mutate rad
+		this.rad = Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2));
+    }
 }
 
 function myinit(){
@@ -205,7 +232,8 @@ function update(){
 //        a.health-= foodlosstospeedratio * a.speed / Math.max(a.rep / 2, 1); // faster agents loses health more rapidly, and well fed agents lose a smaller proportion of their health.
 		let repfactor = a.rep > 1 ? a.rep: a.rep/2 + 0.5;
 		repfactor = Math.min(repfactor, a.rad / 5); // bigger agents can benefit from becoming fat
-        a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
+		let brainsizefactor = Math.pow(a.brainsize / initbrainsize, 0.5);
+        a.health-= foodlosstospeedratio * a.rad * a.speed * brainsizefactor / repfactor / rad; // agents loses health proportional to their size (area), brain size and density, better fed agents loses less health
 		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
         a.health-= boostcost*a.boost; //boost costs health
         if(a.health<0) { killi= i; }
@@ -276,7 +304,7 @@ function update(){
     //feed forward the brain from senses to output
     for(i in agents) {
         var a = agents[i];
-        res= a.brain.tick(a.s1, a.s2);
+        res= a.brain.tick(a);
         
         //apply output neuron 0: controls turning. Also cap it to a max of 0.3 rotation
         var des= res.out0;
@@ -318,9 +346,8 @@ function update(){
         a.rep -= Math.min(a.rep, a.rep*0.3 + 1);
 		a.children++;
         
-         var anew= new Agent();
+         var anew= new Agent(a);
          anew.pos=  new Vector2D(a.pos.x + randf(-30,30), a.pos.y + randf(-30,30));
-         anew.brain.mutateFrom(a, anew);
         
 		anew.generation = a.generation + 1;
 		
@@ -336,34 +363,36 @@ function update(){
     
     //spawn more agents if there are too few agents left
     if(agents.length<Math.max(2,startagents - generation)) {
-        var anew= new Agent();
-		if (!firstrun) {
-			let best;
+		var anew;
+		if (firstrun) {
+			anew= new Agent();
+		} else {
+			let parent;
 			/*
 			// selecting random live agent
-			best = agents[Math.floor(randf(0, agents.length -1))];
+			parent = agents[Math.floor(randf(0, agents.length -1))];
 			*/
 			/*
-			best = agents[0];
+			parent = agents[0];
 			for(i in agents) {
 				var a = agents[i];
 				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
-				if (a.children > best.children || a.generation < best.generation || a.health > best.health) best = a;
+				if (a.children > parent.children || a.generation < parent.generation || a.health > parent.health) parent = a;
 			}*/
 			
 			// rolling back time to an extinct generation
-			best = agents[0];
+			parent = agents[0];
 			for(i in agents) {
 				var ancestor = agents[i];
 				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
-				if (a.generation < best.generation || a.children > best.children || a.health > best.health) best = a;
+				if (a.generation < parent.generation || a.children > parent.children || a.health > parent.health) parent = a;
 			}
-			if (best.generation > 0) best = generations[best.generation - 1];
+			if (parent.generation > 0) parent = generations[parent.generation - 1];
 			
-			anew.brain.mutateFrom(best, anew);
-			anew.generation = best.generation;
+			anew= new Agent(parent);
+			anew.generation = parent.generation;
 			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
-			console.warn(`spawining new handicapped mutated clone of generation ${best.generation} with ${best.children} children and ${best.health} health`);
+			console.warn(`spawining new handicapped mutated clone of generation ${parent.generation} with ${parent.children} children and ${parent.health} health`);
 		}
         agents.push(anew);
     } else {
@@ -434,23 +463,23 @@ function draw(){
             ctx.fillStyle = 'rgb(0,0,0)';
             ctx.beginPath();
             var SS=100;
-            for (var m=0;m<brainsize;m++) {
-                var r1= 2*Math.PI*m/brainsize;
-                for (var n=0;n<braindensity;n++) {
+            for (var m=0;m<a.brainsize;m++) {
+                var r1= 2*Math.PI*m/a.brainsize;
+                for (var n=0;n<a.braindensity;n++) {
                     //this.w[i][j]*this.act[this.ix[i][j]]
-                    var act= Math.round(a.brain.w[i][j]*120+120);
-                    var r2= 2*Math.PI*a.brain.ix[m][n]/brainsize;
+                    var act= Math.round(a.brain.w[m][n]*120+120);
+                    var r2= 2*Math.PI*a.brain.ix[m][n]/a.brainsize;
                     ctx.moveTo(SS*Math.cos(r1)+WIDTH-SS*1.5, SS*Math.sin(r1)+HEIGHT-SS*1.5);
                     ctx.lineTo(SS*Math.cos(r2)+WIDTH-SS*1.5, SS*Math.sin(r2)+HEIGHT-SS*1.5);
                 }
             }
             ctx.stroke();
             
-            for (var m=0;m<brainsize;m++) {
+            for (var m=0;m<a.brainsize;m++) {
                 //var act= 1.0/(1.0 + Math.exp(-a));  //pass through sigmoid
                 var act= Math.round(a.brain.act[m]*255);
                 ctx.fillStyle = 'rgb('+act+','+act+','+act+')';
-                var r1= 2*Math.PI*m/brainsize;
+                var r1= 2*Math.PI*m/a.brainsize;
                 drawCircle(SS*Math.cos(r1)+WIDTH-SS*1.5, SS*Math.sin(r1)+HEIGHT-SS*1.5, 10);
             }
             
