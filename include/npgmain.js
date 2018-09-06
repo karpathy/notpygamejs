@@ -109,6 +109,7 @@ function eventKeyDown(e) {
 }
 
 var tickintervalid = undefined;
+var inited = false;
 function NPGinit(FPS){
   //takes frames per secont to run at
   
@@ -127,12 +128,15 @@ function NPGinit(FPS){
   if (tickintervalid) clearInterval(tickintervalid);
 	  
   tickintervalid = setInterval(FPS > 100? NPGtickFast: NPGtick, 1000/FPS);
-  
-  myinit();
+
+  if (!inited){
+    myinit();
+    inited = true;
+  }
 }
 
 function NPGtickFast() {
-	for(var i=0; i<100;i++) NPGtick(true);
+	for(var i=0; i<250;i++) NPGtick(true);
 	NPGtick(false);
 }
 
