@@ -9,6 +9,7 @@
 var agents = [];
 var food = [];
 var generations = [];
+var oldest = null;
 
 // Initial genes values (mutating variables) - first ancestors should be viable-ish
 var eyesep= 0.6; //separate of eyes in radians
@@ -20,6 +21,7 @@ var mutrate2= 0.3; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
 
 // laws of physics
+var scale= 50; // the scale/zoom of the physical world representation (default 100).
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
 var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
 var foodaddfreq= 18; //how often do we add food?
@@ -35,6 +37,7 @@ var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
 
 //--------//--------
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
+var scalefactor = scale/100;
 
 function Brain()
 {
@@ -171,6 +174,7 @@ function Agent(){
 	this.eyelen= eyelen;
 	this.eyesens= eyesens;
 	this.rad = rad;
+    this.bornAt = new Date().getTime();
 }
 
 function myinit(){
@@ -180,6 +184,16 @@ function myinit(){
     ctx.font = "12pt Arial";
     ctx.strokeStyle="black";
     ctx.lineWidth="1.5";
+
+    //spawn food
+    var q = Math.min(foodlimit/Math.pow(scalefactor,2), 1000/foodaddfreq/Math.pow(scalefactor,2));
+
+    for(var i=0; i<q; i++) {
+        var f = {
+            pos: new Vector2D(randf(0,WIDTH), randf(0,HEIGHT))
+        };
+        food.push(f);
+    }
 }
 
 let firstrun = true;
@@ -192,7 +206,7 @@ function update(){
         var a = agents[i];
         
         //move agent
-        var vel= new Vector2D((a.boost+a.speed)*Math.cos(a.dir), (a.boost+a.speed)*Math.sin(a.dir));
+        var vel= new Vector2D((a.boost+a.speed)*Math.cos(a.dir)*scalefactor, (a.boost+a.speed)*Math.sin(a.dir)*scalefactor);
         a.pos.plusEq(vel);
         
         //enforce boundary conditions: wrap around if necessary
@@ -208,7 +222,14 @@ function update(){
         a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
 		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
         a.health-= boostcost*a.boost; //boost costs health
-        if(a.health<0) { killi= i; }
+        if(a.health<0) {
+            killi= i;
+            a.age = new Date().getTime() - a.bornAt;
+            if (!oldest || oldest.age < a.age) {
+                oldest = a;
+                console.warn(`New oldest specimen from generation ${a.generation} lived ${a.age / (1000 * 60)} minutes`);
+            }
+        }
     }
     if(killi!=-1) {
 		console.log(`A generation ${agents[i].generation} agent died! ${agents.length - 1} agents left`);
@@ -216,8 +237,20 @@ function update(){
 		
 		// 5% chance of respawning a random old ancestor after generations stabilize
 		if (generations.length > 0 && randf(0,1)<0.05) {
-			console.warn(`An ancient specimen of generation ${randi(0, generations.length -1)} has been ressurrected`);
-			agents.push(generations[randi(0, generations.length -1)]);
+            const ressurrectedGen = randi(0, generations.length -1);
+			agents.push(generations[ressurrectedGen]);
+			console.warn(`An ancient specimen of generation ${ressurrectedGen} has been ressurrected`);
+		}
+
+		// 5% chance of respawning the longest lived specimen from the dead.
+		if (oldest && randf(0,1)<0.05) {
+            
+            const anew = new Agent();
+			anew.brain.mutateFrom(oldest, anew);
+			anew.generation = oldest.generation;
+			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
+			agents.push(anew);
+            console.warn(`Longest lived specimen of generation ${oldest.generation} has been ressurrected`);
 		}
 	}
     
@@ -228,7 +261,7 @@ function update(){
             var a2 = agents[j];
             if(i==j) continue;
             var d= Math.sqrt(Math.pow(a.pos.x-a2.pos.x,2) + Math.pow(a.pos.y-a2.pos.y,2));
-            var overlap= a.rad*2-d;
+            var overlap= a.rad*2*scalefactor-d;
             if(overlap>0 && d>1){
                 //one agent pushes on another proportional to his boost. Higher boost wins
                 var aggression= a2.boost/(a.boost+a2.boost);
@@ -254,7 +287,7 @@ function update(){
             var f = food[j];
             
             var d2= Math.sqrt(Math.pow(a.pos.x-f.pos.x,2) + Math.pow(a.pos.y-f.pos.y,2));
-            if(d2 < a.rad){
+            if(d2 < a.rad*scalefactor){
                 a.rep+= foodgain;
                 a.health+= foodgain;
                 if(a.health>1) a.health= 1;
@@ -262,13 +295,15 @@ function update(){
             }
             			
 			//compute position of both eyes in world coordinates
-			var x1= a.pos.x + a.eyelen*Math.cos(a.dir - a.eyesep);
-			var y1= a.pos.y + a.eyelen*Math.sin(a.dir - a.eyesep);
-			var x2= a.pos.x + a.eyelen*Math.cos(a.dir + a.eyesep);
-			var y2= a.pos.y + a.eyelen*Math.sin(a.dir + a.eyesep);
-			
-			a.s1 += eyemult*Math.exp(-(Math.pow(1+a.eyesens*15/rad, 1/2)-1)*(Math.pow(x1-f.pos.x,2) + Math.pow(y1-f.pos.y,2)));
-			a.s2 += eyemult*Math.exp(-(Math.pow(1+a.eyesens*15/rad, 1/2)-1)*(Math.pow(x2-f.pos.x,2) + Math.pow(y2-f.pos.y,2)));
+            var x1= a.pos.x + a.eyelen*Math.cos(a.dir - a.eyesep)*scalefactor;
+			var y1= a.pos.y + a.eyelen*Math.sin(a.dir - a.eyesep)*scalefactor;
+			var x2= a.pos.x + a.eyelen*Math.cos(a.dir + a.eyesep)*scalefactor;
+			var y2= a.pos.y + a.eyelen*Math.sin(a.dir + a.eyesep)*scalefactor;
+
+            let adds1 = eyemult * Math.exp(-(Math.pow(1+a.eyesens, 1/2)-1)*15/rad * (Math.pow((x1-f.pos.x)/scalefactor,2) + Math.pow((y1-f.pos.y)/scalefactor,2)));
+            let adds2 = eyemult * Math.exp(-(Math.pow(1 + a.eyesens, 1 / 2) - 1)*15/rad * (Math.pow((x2 - f.pos.x)/scalefactor, 2) + Math.pow((y2 - f.pos.y)/scalefactor, 2)));
+            a.s1 += adds1;
+            a.s2 += adds2;
         }
     }
     if(killi!=-1) food.splice(killi, 1);
@@ -296,7 +331,7 @@ function update(){
      }
      
     //spawn more food, maybe
-    if(counter%foodaddfreq==0 && food.length<foodlimit) {
+    if(counter%foodaddfreq*Math.pow(scalefactor,2)==0 && food.length<foodlimit/Math.pow(scalefactor,2)) {
         var f = {
             pos: new Vector2D(randf(0,WIDTH), randf(0,HEIGHT))
         };
@@ -363,7 +398,7 @@ function update(){
 			anew.brain.mutateFrom(best, anew);
 			anew.generation = best.generation;
 			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
-			console.warn(`spawining new handicapped mutated clone of generation ${best.generation} with ${best.children} children and ${best.health} health`);
+			console.warn(`spawning new handicapped mutated clone of generation ${best.generation} with ${best.children} children and ${best.health} health`);
 		}
         agents.push(anew);
     } else {
@@ -382,7 +417,7 @@ function draw(){
     ctx.fillStyle = 'rgb(100,230,100)';
     for(i in food) {
         var f = food[i];
-        drawCircle(f.pos.x, f.pos.y, 10);
+        drawCircle(f.pos.x, f.pos.y, 10*scalefactor);
     }
     
     //draw all agents
@@ -397,8 +432,8 @@ function draw(){
         //first compute their position
         var a1= -a.eyesep + Math.PI/2;
         var a2= a.eyesep + Math.PI/2;
-        var x1= Math.cos(a1)*a.eyelen; var y1= Math.sin(a1)*a.eyelen;
-        var x2= Math.cos(a2)*a.eyelen; var y2= Math.sin(a2)*a.eyelen;
+        var x1= Math.cos(a1)*a.eyelen*scalefactor; var y1= Math.sin(a1)*a.eyelen*scalefactor;
+        var x2= Math.cos(a2)*a.eyelen*scalefactor; var y2= Math.sin(a2)*a.eyelen*scalefactor;
         
         //draw the lines to eyes
         ctx.fillStyle = 'rgb(0,0,0)';
@@ -413,10 +448,10 @@ function draw(){
         //draw the eyes, colored by how much food they sense
         var s= Math.round(a.s1*255.0);
         ctx.fillStyle = 'rgb('+s+',0,0)';
-        drawCircle(x1, y1, 5)
+        drawCircle(x1, y1, 5*scalefactor)
         var s= Math.round(a.s2*255.0); if(s>255) s=255;
         ctx.fillStyle = 'rgb('+s+',0,0)';
-        drawCircle(x2, y2, 5)
+        drawCircle(x2, y2, 5*scalefactor)
         
         //draw agent body and outline
         if (!a.selected){
@@ -424,7 +459,7 @@ function draw(){
         } else {
             ctx.fillStyle = 'rgb(0,'+Math.round(255.0*a.health)+','+Math.round(255.0*a.health)+')';
         }
-        drawCircle(0, 0, a.rad);
+        drawCircle(0, 0, a.rad*scalefactor);
         ctx.restore();
         
         //draw brain of this agent, if it is selected
