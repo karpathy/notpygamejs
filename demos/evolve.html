@@ -492,6 +492,54 @@ function togglefast() {
 	NPGinit(isfast? 50: 500);
 	isfast = !isfast;
 }
+
+function saveState() {
+  let obj = {
+    agents,
+    food,
+    generations,
+    generation
+  };
+  save('evolution.json', JSON.stringify(obj));
+}
+
+function save(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+
+  element.style.display = 'none';
+  document.body.appendChild(element);
+
+  element.click();
+
+  document.body.removeChild(element);
+}
+
+function handleFileSelect(evt) {
+  var files = evt.target.files; // FileList object
+
+  // Loop through the FileList and render image files as thumbnails.
+  for (var i = 0, f; f = files[i]; i++) {
+
+    var reader = new FileReader();
+
+    // Closure to capture the file information.
+    reader.onload = (function(theFile) {
+      return function(e) {
+        // Render thumbnail.
+        let obj = JSON.parse(e.target.result);
+        agents = obj.agents;
+        food = obj.food;
+        generations = obj.generations;
+        generation = obj.generation;
+      };
+    })(f);
+
+    // Read in the image file as a data URL.
+    reader.readAsText(f);
+  }
+}
 </script>
 
 <style type="text/css">
@@ -522,11 +570,11 @@ body {
 </style>
 
 </head>
-<body onLoad="NPGinit(100);">
+<body onLoad="NPGinit(100);document.getElementById('files').addEventListener('change', handleFileSelect, false);">
 <h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
 <h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><p>
+<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" /><p>
 <canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/jonathascarrijo/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
