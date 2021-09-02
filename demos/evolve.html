@@ -24,15 +24,15 @@ var rad= 15; //radius of agents
 var scale= 50; // the scale/zoom of the physical world representation (default 100).
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
 var foodlosstospeedratio= 0.0006; //food loss per iteration for each speed unit
-var foodaddfreq= 10; //how often do we add food?
-var foodlimit= 30; //how much food can there be total?
+var foodaddfreq= 5; //how often do we add food?
+var foodlimit= 60; //how much food can there be total?
 var boostcost=0.001;  //how much does use of boost cost in health
 var clonehandicap= 0.6; // the starting health of a respawned mutated clone when population gets too low.
 var startagents= 20; // the starting number of agents
 
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
-var brainsize= 6000; //how many neurons does each brain have. Must be bigger than about 10
+var brainsize= 90; //how many neurons does each brain have. Must be bigger than about 10
 var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
 var biasneurons=15;
 
@@ -150,7 +150,7 @@ Brain.prototype = {
         }
 
 		// mutate speed
-		a.speed = parent.speed * calcFactor(mutrate * 2, mutrate2);
+		a.speed = Math.max(3, parent.speed * calcFactor(mutrate * 2, mutrate2));
 		
 		// mutate repthr
 		a.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
@@ -171,7 +171,7 @@ Brain.prototype = {
 		a.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
 		
 		// mutate rad
-		a.rad = Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2));
+		a.rad = Math.max(3, Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2)));
     }
 }
 
