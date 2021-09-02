@@ -6,10 +6,6 @@
 <script src="../include/vector2D.js"></script>
 <script type="text/javascript">
 
-var agents = [];
-var food = [];
-var generations = [];
-var oldest = null;
 
 // Initial genes values (mutating variables) - first ancestors should be viable-ish
 var eyesep= 0.6; //separate of eyes in radians
@@ -23,43 +19,53 @@ var rad= 15; //radius of agents
 // laws of physics
 var scale= 50; // the scale/zoom of the physical world representation (default 100).
 var foodgain= 0.5; //how much food and replication is gained when agent eats?
-var foodlosstospeedratio= 0.0005; //food loss per iteration for each speed unit
-var foodaddfreq= 18; //how often do we add food?
+var foodlosstospeedratio= 0.0006; //food loss per iteration for each speed unit
+var foodaddfreq= 5; //how often do we add food?
 var foodlimit= 60; //how much food can there be total?
 var boostcost=0.001;  //how much does use of boost cost in health
-var clonehandicap= 0.4; // the starting health of a respawned mutated clone when population gets too low.
+var clonehandicap= 0.6; // the starting health of a respawned mutated clone when population gets too low.
 var startagents= 20; // the starting number of agents
 
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
-var brainsize= 60; //how many neurons does each brain have. Must be bigger than about 10
+var brainsize= 90; //how many neurons does each brain have. Must be bigger than about 10
 var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
+var biasneurons=15;
 
-//--------//--------
+// simulation state control
+var agents = [];
+var food = [];
+var generations = [];
+var breediest = null;
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
+var counter = 0;
+
+// calculated constants
 var scalefactor = scale/100;
 
 function Brain()
 {
-  
+
+    this.size = brainsize;
+    this.density = braindensity;
+    this.biasneurons = biasneurons; 
   //1D array of neuron activations
-  this.act= new Array(brainsize);
-  for (var i=0;i<brainsize;i++) {
+  this.act= new Array(this.size);
+  for (var i=0;i<this.size;i++) {
     this.act[i]= 0;
   }
   
   //2D array of synapse weights and indexes of neurons they connect to
-  this.w= new Array(brainsize);
-  this.ix= new Array(brainsize);
-  for (var i=0;i<brainsize;i++) {
-    this.w[i]= new Array(braindensity);
-    this.ix[i]= new Array(braindensity);
-    for (var j=0;j<braindensity;j++) {
+  this.w= new Array(this.size);
+  this.ix= new Array(this.size);
+  for (var i=0;i<this.size;i++) {
+    this.w[i]= new Array(this.density);
+    this.ix[i]= new Array(this.density);
+    for (var j=0;j<this.density;j++) {
         this.w[i][j]= randf(-1.2, 1.2);
-        this.ix[i][j]= randi(0, brainsize);
+        this.ix[i][j]= randi(0, this.size);
     }
   }
-  
 }
 
 //feeds forward the brain. s1 and s2 are the two senses, both in [0,1]
@@ -71,14 +77,15 @@ Brain.prototype = {
 
         this.act[0]= s1; //set inputs
         this.act[1]= s2;
-        this.act[3]= 1; //some bias neurons are always on
-        this.act[4]= 1;
-        this.act[5]= 1;
-        this.act[6]= 1;
-        
-        for (var i=7;i<brainsize;i++) {
+
+        //some bias neurons are always on
+        for(var i=3; i<this.biasneurons+3; i++) {
+            this.act[i] = 1;
+        }
+
+        for (var i=3+this.biasneurons; i<this.size; i++) {
             var a=0;
-            for (var j=0;j<braindensity;j++) {
+            for (var j=0;j<this.density;j++) {
                 a+= this.w[i][j]*this.act[this.ix[i][j]]
             }
             this.act[i]= 1.0/(1.0 + Math.exp(-a));  //pass through sigmoid
@@ -86,38 +93,67 @@ Brain.prototype = {
         
         //assume last 2 neurons are the outputs
         return {
-            out0: this.act[brainsize-1] - 0.5, 
-            out1: this.act[brainsize-2]
+            out0: this.act[this.size-1] - 0.5, 
+            out1: this.act[this.size-2]
         };
     },
     
     //used during reproduction
     //copy over the brain with some mutation. crude. for now
     mutateFrom : function(parent, a) {
-		let brain = parent.brain
-		console.log('reproducing');
+		let brain = parent.brain;
 		let mutrate = parent.mutrate;
 		let mutrate2 = parent.mutrate2;
-        //lossy copy of brain structure
-        for (var i=0;i<brainsize;i++) {
-          for (var j=0;j<braindensity;j++) {
-            var m= brain.w[i][j];
+        let { size, density, biasneurons } = brain;
+
+        // this.size = Math.max(10, size + calcIncrement(mutrate/3, mutrate2));
+        this.density = Math.max(1, density + calcIncrement(mutrate, mutrate2));
+        this.biasneurons = Math.max(2, biasneurons + calcIncrement(mutrate*2, mutrate2));
+        if (this.size !== size || this.density !== density) {
+            // rebuilding mutated brain
+            console.info('rebuilding mutated brain');
+            //1D array of neuron activations
+            this.act= new Array(this.size);
+            for (var i=0;i<this.size;i++) {
+                this.act[i]= 0;
+            }
+            
+            //2D array of synapse weights and indexes of neurons they connect to
+            this.w= new Array(this.size);
+            this.ix= new Array(this.size);
+            for (var i=0;i<this.size;i++) {
+                this.w[i]= new Array(this.density);
+                this.ix[i]= new Array(this.density);
+                for (var j=0;j<this.density;j++) {
+                    this.w[i][j]= randf(-1.2, 1.2);
+                    this.ix[i][j]= randi(0, this.size);
+                }
+            }
+        }
+
+        //lossy copy of parent's brain structure
+        for (var i=0;i<this.size;i++) {
+          for (var j=0;j<this.density;j++) {
+            var mi = Math.min(brain.w.length - 1, i);
+            var mj = Math.min(brain.w[mi].length - 1, j);
+            var m= brain.w[mi][mj];
             if(randf(0,1)<mutrate) {
 				m += randn(0,mutrate2); 
 				//mutrate /= 2;
 			}
             this.w[i][j]= m;
             
-            m= brain.ix[i][j];
+            m= brain.ix[mi][mj];
             if(randf(0,1)<mutrate) {
-				m = randi(0,brainsize);
+				m = randi(0,this.size);
 				//mutrate /= 2;
 			}
             this.ix[i][j]= m;
           }
         }
+
 		// mutate speed
-		a.speed = parent.speed * calcFactor(mutrate * 2, mutrate2);
+		a.speed = Math.max(3, parent.speed * calcFactor(mutrate * 2, mutrate2));
 		
 		// mutate repthr
 		a.repthr = parent.repthr * calcFactor(mutrate, mutrate2);
@@ -138,7 +174,7 @@ Brain.prototype = {
 		a.eyesens = parent.eyesens * calcFactor(mutrate, mutrate2);
 		
 		// mutate rad
-		a.rad = Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2));
+		a.rad = Math.max(3, Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2)));
     }
 }
 
@@ -151,6 +187,13 @@ let calcFactor = function(mutrate, mutrate2) {
 		if (factor <0) alert(`bug sign: ${sign} mutrate2: ${mutrate2} r: ${r}`);
 	}
 	return factor;
+}
+
+let calcIncrement = function(mutrate, mutrate2) {
+	if(randf(0,1)<mutrate) {
+        return randf(0,1) > 0.5? 1: -1;
+	}
+	return 0;
 }
 
 function Agent(){
@@ -198,7 +241,13 @@ function myinit(){
 
 let firstrun = true;
 let numagents = 0;
+let pause = false;
+let paused = false;
 function update(){
+    paused = pause;
+    if (paused) {
+        return;
+    }
     counter=counter+1;
     
     killi=-1;
@@ -225,32 +274,32 @@ function update(){
         if(a.health<0) {
             killi= i;
             a.age = new Date().getTime() - a.bornAt;
-            if (!oldest || oldest.age < a.age) {
-                oldest = a;
-                console.warn(`New oldest specimen from generation ${a.generation} lived ${a.age / (1000 * 60)} minutes`);
+            if (!breediest || breediest.children < a.children || (breediest.children === a.children && breediest.age > a.age)) {
+                breediest = a;
+                console.warn(`New breediest specimen from generation ${a.generation} had ${a.children} lived ${a.age / (1000 * 60)} minutes`);
             }
         }
     }
     if(killi!=-1) {
-		console.log(`A generation ${agents[i].generation} agent died! ${agents.length - 1} agents left`);
+		console.debug(`A generation ${agents[i].generation} agent died! ${agents.length - 1} agents left`);
 		agents.splice(killi, 1);
 		
-		// 5% chance of respawning a random old ancestor after generations stabilize
-		if (generations.length > 0 && randf(0,1)<0.05) {
+		// 2% chance of respawning a random old ancestor after generations stabilize
+		if (generations.length > 0 && randf(0,1)<0.02) {
             const ressurrectedGen = randi(0, generations.length -1);
 			agents.push(generations[ressurrectedGen]);
 			console.warn(`An ancient specimen of generation ${ressurrectedGen} has been ressurrected`);
 		}
 
-		// 5% chance of respawning the longest lived specimen from the dead.
-		if (oldest && randf(0,1)<0.05) {
+		// 3% chance of respawning the breediest specimen from the dead.
+		if (breediest && randf(0,1)<0.03) {
             
             const anew = new Agent();
-			anew.brain.mutateFrom(oldest, anew);
-			anew.generation = oldest.generation;
+			anew.brain.mutateFrom(breediest, anew);
+			anew.generation = breediest.generation;
 			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
 			agents.push(anew);
-            console.warn(`Longest lived specimen of generation ${oldest.generation} has been ressurrected`);
+            console.warn(`Breediest specimen of generation ${breediest.generation} has been ressurrected`);
 		}
 	}
     
@@ -355,13 +404,14 @@ function update(){
         
          var anew= new Agent();
          anew.pos=  new Vector2D(a.pos.x + randf(-30,30), a.pos.y + randf(-30,30));
+		 console.info('reproducing');
          anew.brain.mutateFrom(a, anew);
         
 		anew.generation = a.generation + 1;
 		
 		if (anew.generation > generation) {
 			generation = anew.generation;
-			console.log(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
+			console.info(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
 			document.getElementById('generation').innerHTML = '' + generation;
 			generations.push(a);
 		}
@@ -370,7 +420,7 @@ function update(){
     }
     
     //spawn more agents if there are too few agents left
-    if(agents.length<Math.max(2,startagents - generation)) {
+    if(agents.length<Math.max(8,startagents - generation)) {
         var anew= new Agent();
 		if (!firstrun) {
 			let best;
@@ -399,7 +449,9 @@ function update(){
 			anew.generation = best.generation;
 			anew.health = clonehandicap; // respawned agents must be handicapped against reproduced ones.
 			console.warn(`spawning new handicapped mutated clone of generation ${best.generation} with ${best.children} children and ${best.health} health`);
-		}
+		} else {
+            console.warn('spawning first agents');
+        }
         agents.push(anew);
     } else {
 		firstrun = false;
@@ -529,11 +581,18 @@ function togglefast() {
 }
 
 function saveState() {
+    pause = true;
+    if (!paused) {
+        setTimeout(saveState, 250);
+        return;
+    }
   let obj = {
     agents,
     food,
     generations,
-    generation
+    generation,
+    breediest,
+    counter,
   };
   save('evolution.json', JSON.stringify(obj));
 }
@@ -549,37 +608,55 @@ function save(filename, text) {
   element.click();
 
   document.body.removeChild(element);
+  pause = false;
 }
 
 function handleFileSelect(evt) {
-  var files = evt.target.files; // FileList object
-
-  // Loop through the FileList and render image files as thumbnails.
-  for (var i = 0, f; f = files[i]; i++) {
-
+    pause = true;
+    if (!paused) {
+        setTimeout(() => handleFileSelect(evt), 250);
+        return;
+    }
+    var f = evt.target.files[0]; // FileList object
     var reader = new FileReader();
 
     // Closure to capture the file information.
     reader.onload = (function(theFile) {
       return function(e) {
         // Render thumbnail.
+
+        const reliveAgent = (a) => {
+            a.pos = new Vector2D(a.pos.x, a.pos.y);
+            a.brain.tick = Brain.prototype.tick;
+            a.brain.mutateFrom = Brain.prototype.mutateFrom;
+        }
         let obj = JSON.parse(e.target.result);
         agents = obj.agents;
         food = obj.food;
         generations = obj.generations;
         generation = obj.generation;
+        breediest = reliveAgent(obj.breediest);
+        counter = obj.counter;
+
+        for(const agent of agents) {
+            reliveAgent(agent);
+        }
+        for (const agent of generations) {
+            reliveAgent(agent);
+        }
+        pause = false;
       };
     })(f);
 
     // Read in the image file as a data URL.
     reader.readAsText(f);
-  }
+
 }
 </script>
 
 <style type="text/css">
 canvas { 
-    border: 1px solid #555;
+    border: 1px solid rgb(3, 3, 3);
     margin-top: 20px;
 }
 h1 {
