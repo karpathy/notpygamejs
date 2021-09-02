@@ -109,7 +109,7 @@ function eventKeyDown(e) {
 }
 
 var tickintervalid = undefined;
-function NPGinit(FPS){
+function NPGinit(FPS, skipInit = false){
   //takes frames per secont to run at
   
   canvas = document.getElementById('NPGcanvas');
@@ -128,11 +128,13 @@ function NPGinit(FPS){
 	  
   tickintervalid = setInterval(FPS > 100? NPGtickFast: NPGtick, 1000/FPS);
   
-  myinit();
+  if (!skipInit) {
+    myinit();
+  }
 }
 
 function NPGtickFast() {
-	for(var i=0; i<100;i++) NPGtick(true);
+	for(var i=0; i<500;i++) NPGtick(true);
 	NPGtick(false)
 }
 

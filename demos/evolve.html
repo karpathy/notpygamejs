@@ -15,6 +15,9 @@ var repthr= 3; // what is the replication threshold? in amount of food
 var mutrate= 0.05; //how common are mutations? <0.5
 var mutrate2= 0.3; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
+var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
+var biasneurons=15; // how many bias neurons the agent has
+var immunity = 120;
 
 // laws of physics
 var scale= 50; // the scale/zoom of the physical world representation (default 100).
@@ -29,8 +32,6 @@ var startagents= 20; // the starting number of agents
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
 var brainsize= 90; //how many neurons does each brain have. Must be bigger than about 10
-var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
-var biasneurons=15;
 
 // simulation state control
 var agents = [];
@@ -39,6 +40,7 @@ var generations = [];
 var breediest = null;
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
 var counter = 0;
+var fps = 50;
 
 // calculated constants
 var scalefactor = scale/100;
@@ -175,6 +177,9 @@ Brain.prototype = {
 		
 		// mutate rad
 		a.rad = Math.max(3, Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2)));
+
+        // mutate immunity
+        a.immunity = Math.max(10, parent.immunity + calcIncrement(mutrate, mutrate2));
     }
 }
 
@@ -210,6 +215,7 @@ function Agent(){
 	this.mutrate = mutrate;
 	this.mutrate2 = mutrate2;
 	this.repthr = repthr;
+    this.immunity = immunity;
 	this.generation = 0;
 	this.children = 0;
 	
@@ -271,6 +277,13 @@ function update(){
         a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
 		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
         a.health-= boostcost*a.boost; //boost costs health
+        a.health-= 0.0003 * a.immunity / fps;
+
+        //agent subject to die from infection (5% per second chance of dying with no immunity)
+        if (randf(0, 1) < (0.05 / (fps * a.immunity))) {
+            a.health-= 1; // agend will die from infection
+            console.info('infection');
+        }
         if(a.health<0) {
             killi= i;
             a.age = new Date().getTime() - a.bornAt;
@@ -440,8 +453,8 @@ function update(){
 			best = agents[0];
 			for(i in agents) {
 				var ancestor = agents[i];
-				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
-				if (a.generation < best.generation || a.children > best.children || a.health > best.health) best = a;
+				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution),.
+				if (a.children > best.children || (a.children === best.children && a.generation < best.generation)) best = a;
 			}
 			if (best.generation > 0) best = generations[best.generation - 1];
 			
@@ -576,8 +589,12 @@ function keyDown(key){
 
 let isfast = false;
 function togglefast() {
-	NPGinit(isfast? 50: 500);
+	NPGinit(isfast? fps: 500, true);
 	isfast = !isfast;
+}
+
+function togglePause() {
+    pause = !pause;
 }
 
 function saveState() {
@@ -686,7 +703,11 @@ body {
 <h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
 <h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" /><p>
+<p>
+    <button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span>
+    <button onclick="togglePause()">Toggle Pause</button>
+    <button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" />
+<p>
 <canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/jonathascarrijo/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
