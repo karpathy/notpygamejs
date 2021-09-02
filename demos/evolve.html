@@ -6,10 +6,6 @@
 <script src="../include/vector2D.js"></script>
 <script type="text/javascript">
 
-var agents = [];
-var food = [];
-var generations = [];
-var breediest = null;
 
 // Initial genes values (mutating variables) - first ancestors should be viable-ish
 var eyesep= 0.6; //separate of eyes in radians
@@ -36,8 +32,15 @@ var brainsize= 90; //how many neurons does each brain have. Must be bigger than 
 var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
 var biasneurons=15;
 
-//--------//--------
+// simulation state control
+var agents = [];
+var food = [];
+var generations = [];
+var breediest = null;
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
+var counter = 0;
+
+// calculated constants
 var scalefactor = scale/100;
 
 function Brain()
@@ -238,7 +241,13 @@ function myinit(){
 
 let firstrun = true;
 let numagents = 0;
+let pause = false;
+let paused = false;
 function update(){
+    paused = pause;
+    if (paused) {
+        return;
+    }
     counter=counter+1;
     
     killi=-1;
@@ -572,11 +581,18 @@ function togglefast() {
 }
 
 function saveState() {
+    pause = true;
+    if (!paused) {
+        setTimeout(saveState, 250);
+        return;
+    }
   let obj = {
     agents,
     food,
     generations,
-    generation
+    generation,
+    breediest,
+    counter,
   };
   save('evolution.json', JSON.stringify(obj));
 }
@@ -592,37 +608,55 @@ function save(filename, text) {
   element.click();
 
   document.body.removeChild(element);
+  pause = false;
 }
 
 function handleFileSelect(evt) {
-  var files = evt.target.files; // FileList object
-
-  // Loop through the FileList and render image files as thumbnails.
-  for (var i = 0, f; f = files[i]; i++) {
-
+    pause = true;
+    if (!paused) {
+        setTimeout(() => handleFileSelect(evt), 250);
+        return;
+    }
+    var f = evt.target.files[0]; // FileList object
     var reader = new FileReader();
 
     // Closure to capture the file information.
     reader.onload = (function(theFile) {
       return function(e) {
         // Render thumbnail.
+
+        const reliveAgent = (a) => {
+            a.pos = new Vector2D(a.pos.x, a.pos.y);
+            a.brain.tick = Brain.prototype.tick;
+            a.brain.mutateFrom = Brain.prototype.mutateFrom;
+        }
         let obj = JSON.parse(e.target.result);
         agents = obj.agents;
         food = obj.food;
         generations = obj.generations;
         generation = obj.generation;
+        breediest = reliveAgent(obj.breediest);
+        counter = obj.counter;
+
+        for(const agent of agents) {
+            reliveAgent(agent);
+        }
+        for (const agent of generations) {
+            reliveAgent(agent);
+        }
+        pause = false;
       };
     })(f);
 
     // Read in the image file as a data URL.
     reader.readAsText(f);
-  }
+
 }
 </script>
 
 <style type="text/css">
 canvas { 
-    border: 1px solid #555;
+    border: 1px solid rgb(3, 3, 3);
     margin-top: 20px;
 }
 h1 {
