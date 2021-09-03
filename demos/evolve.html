@@ -2,6 +2,7 @@
 <head>
 <title>Canvas Artificial Life Evolution Simulation</title>
 
+<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 <script src="../include/npgmain.js"></script>
 <script src="../include/vector2D.js"></script>
 <script type="text/javascript">
@@ -113,7 +114,7 @@ Brain.prototype = {
         this.biasneurons = Math.max(2, biasneurons + calcIncrement(mutrate*2, mutrate2));
         if (this.size !== size || this.density !== density) {
             // rebuilding mutated brain
-            console.info('rebuilding mutated brain');
+            // console.debug('rebuilding mutated brain');
             //1D array of neuron activations
             this.act= new Array(this.size);
             for (var i=0;i<this.size;i++) {
@@ -234,6 +235,18 @@ function myinit(){
     ctx.strokeStyle="black";
     ctx.lineWidth="1.5";
 
+    addFood();
+}
+
+function omitBrain(a) {
+    return _.omit(_.cloneDeep(a), ['brain.act', 'brain.w', 'brain.ix']);
+}
+
+function displayAgent(a) {
+    return JSON.stringify(omitBrain(a)).replaceAll(',', ', ');
+}
+
+function addFood() {
     //spawn food
     var q = Math.min(foodlimit/Math.pow(scalefactor,2), 1000/foodaddfreq/Math.pow(scalefactor,2));
 
@@ -424,8 +437,10 @@ function update(){
 		
 		if (anew.generation > generation) {
 			generation = anew.generation;
-			console.info(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
+            const brainless = displayAgent(a);
+			console.info(`new generation depth:  ${generation}, born from agent ${brainless}`);
 			document.getElementById('generation').innerHTML = '' + generation;
+            document.getElementById('generationJson').innerHTML = brainless;
 			generations.push(a);
 		}
 		
@@ -701,11 +716,12 @@ body {
 </head>
 <body onLoad="NPGinit(100);document.getElementById('files').addEventListener('change', handleFileSelect, false);">
 <h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
-<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
+<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a></h2>
 <p>Click on a bot to select it and see its neural network activations.</p>
 <p>
     <button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span>
     <button onclick="togglePause()">Toggle Pause</button>
+    <button onclick="addFood()">Add Food</button>
     <button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" />
 <p>
 <canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
@@ -714,5 +730,6 @@ body {
 <div class="ex">
 <p>Basically, each creature has two eyes that sense amount of food. Both eyes act as input neurons in a brain, which is just a very simple Neural Network. The output nodes of the neural network turn them. If they accumulate food, they can reproduce with slight mutations in the weights of their brain.</p>
 </div>
+<div>Last agent: </div><div id="generationJson"></div>
 </body>
 </html>
