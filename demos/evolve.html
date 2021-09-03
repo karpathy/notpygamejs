@@ -2,6 +2,7 @@
 <head>
 <title>Canvas Artificial Life Evolution Simulation</title>
 
+<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
 <script src="../include/npgmain.js"></script>
 <script src="../include/vector2D.js"></script>
 <script type="text/javascript">
@@ -12,9 +13,12 @@ var eyesep= 0.6; //separate of eyes in radians
 var eyelen= 30; //how many pixels away from body eyes are
 var eyesens= 0.0005; //how sensitive is the eye? decrease for more sensitivity...
 var repthr= 3; // what is the replication threshold? in amount of food
-var mutrate= 0.05; //how common are mutations? <0.5
-var mutrate2= 0.3; //how severe are they when they do occur? <0.5
+var mutrate= 0.1; //how common are mutations? <0.5
+var mutrate2= 0.2; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
+var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
+var biasneurons=15; // how many bias neurons the agent has
+var immunity = 120;
 
 // laws of physics
 var scale= 50; // the scale/zoom of the physical world representation (default 100).
@@ -29,8 +33,6 @@ var startagents= 20; // the starting number of agents
 // fixed agent parameters not subject to mutation (yet)
 var eyemult= 0.5; //linear multiplier on strength of eye.
 var brainsize= 90; //how many neurons does each brain have. Must be bigger than about 10
-var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
-var biasneurons=15;
 
 // simulation state control
 var agents = [];
@@ -39,6 +41,7 @@ var generations = [];
 var breediest = null;
 var generation= 0; // deepest generation reached by a lineage. Used to "remember" parameters for newly spawned agents.
 var counter = 0;
+var fps = 50;
 
 // calculated constants
 var scalefactor = scale/100;
@@ -68,6 +71,7 @@ function Brain()
   }
 }
 
+let mutated = false;
 //feeds forward the brain. s1 and s2 are the two senses, both in [0,1]
 //health is ... health
 Brain.prototype = {
@@ -105,13 +109,15 @@ Brain.prototype = {
 		let mutrate = parent.mutrate;
 		let mutrate2 = parent.mutrate2;
         let { size, density, biasneurons } = brain;
+        // control to allow only one mutation
+        mutated = false;
 
         // this.size = Math.max(10, size + calcIncrement(mutrate/3, mutrate2));
         this.density = Math.max(1, density + calcIncrement(mutrate, mutrate2));
         this.biasneurons = Math.max(2, biasneurons + calcIncrement(mutrate*2, mutrate2));
         if (this.size !== size || this.density !== density) {
             // rebuilding mutated brain
-            console.info('rebuilding mutated brain');
+            // console.debug('rebuilding mutated brain');
             //1D array of neuron activations
             this.act= new Array(this.size);
             for (var i=0;i<this.size;i++) {
@@ -137,14 +143,16 @@ Brain.prototype = {
             var mi = Math.min(brain.w.length - 1, i);
             var mj = Math.min(brain.w[mi].length - 1, j);
             var m= brain.w[mi][mj];
-            if(randf(0,1)<mutrate) {
+            if (i > mi || j > mj) {
+                m = randf(-1.2, 1.2);
+            } else if(randf(0,1)<mutrate) {
 				m += randn(0,mutrate2); 
 				//mutrate /= 2;
 			}
             this.w[i][j]= m;
             
             m= brain.ix[mi][mj];
-            if(randf(0,1)<mutrate) {
+            if(i > mi || j > mj || randf(0,1)<mutrate) {
 				m = randi(0,this.size);
 				//mutrate /= 2;
 			}
@@ -175,22 +183,27 @@ Brain.prototype = {
 		
 		// mutate rad
 		a.rad = Math.max(3, Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2)));
+
+        // mutate immunity
+        a.immunity = Math.max(10, parent.immunity + calcIncrement(mutrate * 4, mutrate2));
     }
 }
 
 let calcFactor = function(mutrate, mutrate2) {
 	let factor = 1;
-	if(randf(0,1)<mutrate) {
+	if(!mutated && randf(0,1)<mutrate) {
 		let sign = randf(0,1) > 0.5? 1: -1;
 		let r = randf(0,mutrate2)
 		factor = 1 / (1+ (sign * r));
 		if (factor <0) alert(`bug sign: ${sign} mutrate2: ${mutrate2} r: ${r}`);
+        mutated = true;
 	}
 	return factor;
 }
 
 let calcIncrement = function(mutrate, mutrate2) {
-	if(randf(0,1)<mutrate) {
+	if(!mutated && randf(0,1)<mutrate) {
+        mutated = true;
         return randf(0,1) > 0.5? 1: -1;
 	}
 	return 0;
@@ -210,6 +223,7 @@ function Agent(){
 	this.mutrate = mutrate;
 	this.mutrate2 = mutrate2;
 	this.repthr = repthr;
+    this.immunity = immunity;
 	this.generation = 0;
 	this.children = 0;
 	
@@ -228,6 +242,18 @@ function myinit(){
     ctx.strokeStyle="black";
     ctx.lineWidth="1.5";
 
+    addFood();
+}
+
+function omitBrain(a) {
+    return _.omit(_.cloneDeep(a), ['brain.act', 'brain.w', 'brain.ix']);
+}
+
+function displayAgent(a) {
+    return JSON.stringify(omitBrain(a)).replaceAll(',', ', ');
+}
+
+function addFood() {
     //spawn food
     var q = Math.min(foodlimit/Math.pow(scalefactor,2), 1000/foodaddfreq/Math.pow(scalefactor,2));
 
@@ -271,6 +297,13 @@ function update(){
         a.health-= foodlosstospeedratio * a.rad * a.speed / repfactor / 15; // agents loses health proportional to their size (area), better fed agents loses less health
 		a.health-= foodlosstospeedratio*Math.pow(1000*a.eyesens, 1.5)/5; // the more sensitive the eye, the more it costs, quadratically
         a.health-= boostcost*a.boost; //boost costs health
+        a.health-= 0.0003 * a.immunity / fps;
+
+        //agent subject to die from infection (5% per second chance of dying with no immunity)
+        if (randf(0, 1) < (0.05 / (fps * a.immunity))) {
+            a.health-= 1; // agend will die from infection
+            console.info('infection');
+        }
         if(a.health<0) {
             killi= i;
             a.age = new Date().getTime() - a.bornAt;
@@ -411,8 +444,10 @@ function update(){
 		
 		if (anew.generation > generation) {
 			generation = anew.generation;
-			console.info(`new generation depth:  ${generation}, born from agent ${JSON.stringify(a)}`);
+            const brainless = displayAgent(a);
+			console.info(`new generation depth:  ${generation}, born from agent ${brainless}`);
 			document.getElementById('generation').innerHTML = '' + generation;
+            document.getElementById('generationJson').innerHTML = brainless;
 			generations.push(a);
 		}
 		
@@ -440,8 +475,8 @@ function update(){
 			best = agents[0];
 			for(i in agents) {
 				var ancestor = agents[i];
-				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution), most healthy.
-				if (a.generation < best.generation || a.children > best.children || a.health > best.health) best = a;
+				// select oldest fit design. order by: most children, oldest generation (conservative, fairer and fosters safe evolution),.
+				if (a.children > best.children || (a.children === best.children && a.generation < best.generation)) best = a;
 			}
 			if (best.generation > 0) best = generations[best.generation - 1];
 			
@@ -576,8 +611,12 @@ function keyDown(key){
 
 let isfast = false;
 function togglefast() {
-	NPGinit(isfast? 50: 500);
+	NPGinit(isfast? fps: 500, true);
 	isfast = !isfast;
+}
+
+function togglePause() {
+    pause = !pause;
 }
 
 function saveState() {
@@ -684,14 +723,20 @@ body {
 </head>
 <body onLoad="NPGinit(100);document.getElementById('files').addEventListener('change', handleFileSelect, false);">
 <h1>Canvas Artificial Life evolutionary simulation v0.2</h1>
-<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a><h2/>
+<h2>by <a href="http://twitter.com/#!/karpathy" target="_blank">@karpathy</a> and <a href="http://twitter.com/#!/jonathascarrijo" target="_blank">@jonathascarrijo</a></h2>
 <p>Click on a bot to select it and see its neural network activations.</p>
-<p><button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span><button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" /><p>
+<p>
+    <button onclick="togglefast()">Toggle Fast</button> Generation depth: <span id="generation">0</span>&nbsp;&nbsp;&nbsp;Agents: <span id="agents"></span>
+    <button onclick="togglePause()">Toggle Pause</button>
+    <button onclick="addFood()">Add Food</button>
+    <button onclick="saveState()">Save</button> <input type="file" id="files" name="files[]" />
+<p>
 <canvas id="NPGcanvas" width="1240" height="600">Browser not suppoerted for Canvas. Get a real browser.</canvas><br /><br />
 <br />
 <p>Hit CTRL+U to see source code, or visit <a href="https://github.com/jonathascarrijo/notpygamejs" target="_blank">GitHub project.</a> <br />This particular demo is only part of the more general GitHub project, which tries to simplify similar game-like canvas apps.</p>
 <div class="ex">
 <p>Basically, each creature has two eyes that sense amount of food. Both eyes act as input neurons in a brain, which is just a very simple Neural Network. The output nodes of the neural network turn them. If they accumulate food, they can reproduce with slight mutations in the weights of their brain.</p>
 </div>
+<div>Last generation: </div><div id="generationJson"></div>
 </body>
 </html>
