@@ -13,8 +13,8 @@ var eyesep= 0.6; //separate of eyes in radians
 var eyelen= 30; //how many pixels away from body eyes are
 var eyesens= 0.0005; //how sensitive is the eye? decrease for more sensitivity...
 var repthr= 3; // what is the replication threshold? in amount of food
-var mutrate= 0.05; //how common are mutations? <0.5
-var mutrate2= 0.3; //how severe are they when they do occur? <0.5
+var mutrate= 0.1; //how common are mutations? <0.5
+var mutrate2= 0.2; //how severe are they when they do occur? <0.5
 var rad= 15; //radius of agents
 var braindensity= 3; //how dense are the brains? (number of synapses per neuron)
 var biasneurons=15; // how many bias neurons the agent has
@@ -71,6 +71,7 @@ function Brain()
   }
 }
 
+let mutated = false;
 //feeds forward the brain. s1 and s2 are the two senses, both in [0,1]
 //health is ... health
 Brain.prototype = {
@@ -108,6 +109,8 @@ Brain.prototype = {
 		let mutrate = parent.mutrate;
 		let mutrate2 = parent.mutrate2;
         let { size, density, biasneurons } = brain;
+        // control to allow only one mutation
+        mutated = false;
 
         // this.size = Math.max(10, size + calcIncrement(mutrate/3, mutrate2));
         this.density = Math.max(1, density + calcIncrement(mutrate, mutrate2));
@@ -140,14 +143,16 @@ Brain.prototype = {
             var mi = Math.min(brain.w.length - 1, i);
             var mj = Math.min(brain.w[mi].length - 1, j);
             var m= brain.w[mi][mj];
-            if(randf(0,1)<mutrate) {
+            if (i > mi || j > mj) {
+                m = randf(-1.2, 1.2);
+            } else if(randf(0,1)<mutrate) {
 				m += randn(0,mutrate2); 
 				//mutrate /= 2;
 			}
             this.w[i][j]= m;
             
             m= brain.ix[mi][mj];
-            if(randf(0,1)<mutrate) {
+            if(i > mi || j > mj || randf(0,1)<mutrate) {
 				m = randi(0,this.size);
 				//mutrate /= 2;
 			}
@@ -180,23 +185,25 @@ Brain.prototype = {
 		a.rad = Math.max(3, Math.min(30, parent.rad * calcFactor(mutrate * 2, mutrate2)));
 
         // mutate immunity
-        a.immunity = Math.max(10, parent.immunity + calcIncrement(mutrate, mutrate2));
+        a.immunity = Math.max(10, parent.immunity + calcIncrement(mutrate * 4, mutrate2));
     }
 }
 
 let calcFactor = function(mutrate, mutrate2) {
 	let factor = 1;
-	if(randf(0,1)<mutrate) {
+	if(!mutated && randf(0,1)<mutrate) {
 		let sign = randf(0,1) > 0.5? 1: -1;
 		let r = randf(0,mutrate2)
 		factor = 1 / (1+ (sign * r));
 		if (factor <0) alert(`bug sign: ${sign} mutrate2: ${mutrate2} r: ${r}`);
+        mutated = true;
 	}
 	return factor;
 }
 
 let calcIncrement = function(mutrate, mutrate2) {
-	if(randf(0,1)<mutrate) {
+	if(!mutated && randf(0,1)<mutrate) {
+        mutated = true;
         return randf(0,1) > 0.5? 1: -1;
 	}
 	return 0;
@@ -730,6 +737,6 @@ body {
 <div class="ex">
 <p>Basically, each creature has two eyes that sense amount of food. Both eyes act as input neurons in a brain, which is just a very simple Neural Network. The output nodes of the neural network turn them. If they accumulate food, they can reproduce with slight mutations in the weights of their brain.</p>
 </div>
-<div>Last agent: </div><div id="generationJson"></div>
+<div>Last generation: </div><div id="generationJson"></div>
 </body>
 </html>
