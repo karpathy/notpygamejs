@@ -108,27 +108,39 @@ function eventKeyDown(e) {
   keyDown(keycode);
 }
 
-function NPGinit(FPS){
+var tickintervalid = undefined;
+function NPGinit(FPS, skipInit = false){
   //takes frames per secont to run at
   
-  canvas = document.getElementById('NPGcanvas');
-  ctx = canvas.getContext('2d');
-  WIDTH = canvas.width;
-  HEIGHT = canvas.height;
-  canvas.addEventListener('click', eventClick, false);
+  if (!skipInit) {
+    canvas = document.getElementById('NPGcanvas');
+    ctx = canvas.getContext('2d');
+    WIDTH = canvas.width;
+    HEIGHT = canvas.height;
+    canvas.addEventListener('click', eventClick, false);
+    
+    //canvas element cannot get focus by default. Requires to either set 
+    //tabindex to 1 so that it's focusable, or we need to attach listeners
+    //to the document. Here we do the latter
+    document.addEventListener('keyup', eventKeyUp, true);
+    document.addEventListener('keydown', eventKeyDown, true);
+  }
   
-  //canvas element cannot get focus by default. Requires to either set 
-  //tabindex to 1 so that it's focusable, or we need to attach listeners
-  //to the document. Here we do the latter
-  document.addEventListener('keyup', eventKeyUp, true);
-  document.addEventListener('keydown', eventKeyDown, true);
+  if (tickintervalid) clearInterval(tickintervalid);
+	  
+  tickintervalid = setInterval(FPS > 100? NPGtickFast: NPGtick, 1000/FPS);
   
-  setInterval(NPGtick, 1000/FPS);
-  
-  myinit();
+  if (!skipInit) {
+    myinit();
+  }
 }
 
-function NPGtick() {
+function NPGtickFast() {
+	for(var i=0; i<500;i++) NPGtick(true);
+	NPGtick(false)
+}
+
+function NPGtick(skipdraw) {
     update();
-    draw();
+    if(!skipdraw) draw();
 }
